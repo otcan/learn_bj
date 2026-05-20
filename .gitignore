@@ -1,0 +1,15 @@
+AGENTS.md
+
+# Local runtime and editor noise
+.DS_Store
+Thumbs.db
+*.log
+.env
+.env.*
+
+# Generated browser/test artifacts
+screenshots/
+*.png
+*.jpg
+*.jpeg
+*.gif
