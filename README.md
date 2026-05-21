@@ -13,12 +13,10 @@ Ruleset used by the MVP:
 
 Progress, quiz scores, and practice stats are stored in browser local storage.
 
-Lesson cards include an infinite-deck estimate of the dealer outcome distribution, dealer chance of going over 21, dealer average final total, and a percentage-only Stand vs Hit once vs Optimal play outcome comparison.
+Lesson cards include an infinite-deck estimate of the dealer outcome distribution, dealer chance of going over 21, dealer average final total, an overall optimal-strategy summary for the selected dealer upcard, and a percentage-only Stand vs Hit once vs Optimal play outcome comparison.
 
 Shareable app URLs use hash routes:
 
 - `#/learn/2`
 - `#/practice`
-- `#/chart/hard`
-- `#/chart/soft`
-- `#/chart/pair`
+- `#/chart`

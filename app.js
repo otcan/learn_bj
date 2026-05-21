@@ -271,6 +271,24 @@
     soft: SOFT_ROWS,
     pair: PAIR_ROWS
   };
+  const LESSON_ROWS = HARD_ROWS.concat(SOFT_ROWS, PAIR_ROWS);
+  const CHART_SECTIONS = [
+    {
+      key: "hard",
+      title: "Hard Totals",
+      subtitle: "Hands without a flexible ace."
+    },
+    {
+      key: "soft",
+      title: "Soft Totals",
+      subtitle: "Hands where an ace can count as 11."
+    },
+    {
+      key: "pair",
+      title: "Pairs",
+      subtitle: "Two equal ranks before any hit."
+    }
+  ];
 
   const QUIZ_ROWS = [
     { type: "hard", id: "hard-12" },
@@ -286,7 +304,6 @@
   const state = {
     activeTab: "learn",
     selectedDealer: "2",
-    chartMode: "hard",
     quizAnswers: {},
     quizSubmitted: false,
     practiceScenario: null,
@@ -321,9 +338,6 @@
 
     if (first === "chart") {
       state.activeTab = "chart";
-      if (ROW_GROUPS[parts[1]]) {
-        state.chartMode = parts[1];
-      }
       return true;
     }
 
@@ -335,7 +349,7 @@
       return "#/learn/" + state.selectedDealer;
     }
     if (state.activeTab === "chart") {
-      return "#/chart/" + state.chartMode;
+      return "#/chart";
     }
     return "#/practice";
   }
@@ -565,6 +579,22 @@
     return bestHitStandOutcome(handState(row.cards), dealer, {});
   }
 
+  function overallOptimalOutcome(dealer) {
+    const total = LESSON_ROWS.reduce(function (summary, row) {
+      const outcome = optimalHitStandOutcome(row, dealer);
+      summary.win += outcome.win;
+      summary.push += outcome.push;
+      summary.lose += outcome.lose;
+      return summary;
+    }, { win: 0, push: 0, lose: 0 });
+
+    return {
+      win: total.win / LESSON_ROWS.length,
+      push: total.push / LESSON_ROWS.length,
+      lose: total.lose / LESSON_ROWS.length
+    };
+  }
+
   function bestHitStandOutcome(player, dealer, memo) {
     if (player.total > 21) {
       return { win: 0, push: 0, lose: 1 };
@@ -723,11 +753,24 @@
 
   function renderDealerMathStrip(dealer) {
     const dealerMath = dealerStats(dealer);
+    const overall = overallOptimalOutcome(dealer);
     return [
       '<div class="dealer-math-strip">',
       renderHeaderMetric("Dealer goes over 21", formatPercent(dealerMath.bust)),
       renderHeaderMetric("Dealer average final total", formatScore(dealerMath.expectedScore)),
       renderHeaderMetric("Dealer average when not bust", formatScore(dealerMath.madeAverage)),
+      '</div>',
+      '<div class="overall-chance">',
+      '<div class="overall-copy">',
+      '<span>Overall chance</span>',
+      '<strong>Using optimal strategy</strong>',
+      '<p>Average result across the lesson hands shown below.</p>',
+      '</div>',
+      '<div class="overall-metrics">',
+      renderHeaderMetric("Win", formatPercent(overall.win)),
+      renderHeaderMetric("Tie", formatPercent(overall.push)),
+      renderHeaderMetric("Lose", formatPercent(overall.lose)),
+      '</div>',
       '</div>',
       '<p class="math-note">A bust counts as 0 in the average final total. The not-bust average only looks at dealer hands from 17 to 21.</p>'
     ].join("");
@@ -1003,16 +1046,26 @@
   }
 
   function renderChart() {
-    const rows = ROW_GROUPS[state.chartMode];
     app.innerHTML = [
       '<section class="chart-panel">',
       '<div class="panel-header">',
       '<div><h2>Basic Strategy Chart</h2><p class="muted">S17, multi-deck, double after split, no surrender.</p></div>',
       '</div>',
-      '<div class="mode-row">',
-      renderModeButton("hard", "Hard Totals"),
-      renderModeButton("soft", "Soft Totals"),
-      renderModeButton("pair", "Pairs"),
+      CHART_SECTIONS.map(renderChartSection).join(""),
+      '<div class="chart-note">',
+      '<strong>Legend:</strong> H = Hit, S = Stand, D = Double, P = Split. When doubling is unavailable, play the hand as a hit unless local rules say otherwise.',
+      '</div>',
+      '</section>'
+    ].join("");
+  }
+
+  function renderChartSection(section) {
+    const rows = ROW_GROUPS[section.key];
+    return [
+      '<section class="chart-section" id="chart-' + section.key + '">',
+      '<div class="section-heading chart-section-heading">',
+      '<h3>' + section.title + '</h3>',
+      '<p class="section-subtitle">' + section.subtitle + '</p>',
       '</div>',
       '<div class="table-wrap">',
       '<table>',
@@ -1026,15 +1079,8 @@
       '</tbody>',
       '</table>',
       '</div>',
-      '<div class="chart-note">',
-      '<strong>Legend:</strong> H = Hit, S = Stand, D = Double, P = Split. When doubling is unavailable, play the hand as a hit unless local rules say otherwise.',
-      '</div>',
       '</section>'
     ].join("");
-  }
-
-  function renderModeButton(mode, label) {
-    return '<button class="mode-button ' + (state.chartMode === mode ? "active" : "") + '" type="button" data-chart-mode="' + mode + '">' + label + '</button>';
   }
 
   function renderChartRow(row) {
@@ -1132,13 +1178,6 @@
       state.quizAnswers = {};
       state.quizSubmitted = false;
       saveProgress();
-      syncUrl(false);
-      render();
-      return;
-    }
-
-    if (target.dataset.chartMode) {
-      state.chartMode = target.dataset.chartMode;
       syncUrl(false);
       render();
       return;

@@ -117,7 +117,6 @@ h1 {
 }
 
 .tab,
-.mode-button,
 .action-button,
 .dealer-button,
 .secondary-button,
@@ -136,8 +135,7 @@ h1 {
   padding: 0 14px;
 }
 
-.tab.active,
-.mode-button.active {
+.tab.active {
   background: var(--green);
   color: #fff;
 }
@@ -271,6 +269,47 @@ h1 {
   max-width: 620px;
   gap: 10px;
   margin-top: 16px;
+}
+
+.overall-chance {
+  display: grid;
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.35fr);
+  max-width: 620px;
+  gap: 10px;
+  align-items: stretch;
+  margin-top: 10px;
+  border: 1px solid rgba(15, 107, 79, 0.25);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.58);
+  padding: 10px;
+}
+
+.overall-copy {
+  align-self: center;
+}
+
+.overall-copy span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 750;
+}
+
+.overall-copy strong {
+  display: block;
+  font-size: 1rem;
+}
+
+.overall-copy p {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.overall-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
 }
 
 .header-metric {
@@ -690,17 +729,16 @@ h1 {
   padding: 16px;
 }
 
-.mode-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin: 14px 0;
+.chart-section {
+  margin-top: 18px;
 }
 
-.mode-button {
-  border-color: var(--line-strong);
-  background: #fff;
-  padding: 0 12px;
+.chart-section:first-of-type {
+  margin-top: 8px;
+}
+
+.chart-section-heading {
+  margin-bottom: 10px;
 }
 
 .table-wrap {
@@ -811,6 +849,10 @@ th:first-child {
     max-width: none;
   }
 
+  .overall-chance {
+    max-width: none;
+  }
+
   .lesson-grid,
   .quiz-grid,
   .basics-grid {
@@ -857,5 +899,10 @@ th:first-child {
 
   .dealer-math-strip {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .overall-chance,
+  .overall-metrics {
+    grid-template-columns: 1fr;
   }
 }
