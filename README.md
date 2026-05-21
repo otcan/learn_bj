@@ -20,3 +20,7 @@ Shareable app URLs use hash routes:
 - `#/learn/2`
 - `#/practice`
 - `#/chart`
+
+## License
+
+MIT
