@@ -578,6 +578,15 @@
     return value > 0 ? "+" + rounded : rounded;
   }
 
+  function averageResultExplanation(value) {
+    const cents = Math.round(Math.abs(value) * 100);
+    if (cents === 0) {
+      return "Average result uses +1 for win, 0 for tie, -1 for loss. Here, " + formatEv(value) + " means roughly breaking even per $1 bet.";
+    }
+    const direction = value > 0 ? "winning" : "losing";
+    return "Average result uses +1 for win, 0 for tie, -1 for loss. Here, " + formatEv(value) + " means " + direction + " about " + cents + " cents per $1 bet on average.";
+  }
+
   function render() {
     tabButtons.forEach(function (button) {
       button.classList.toggle("active", button.dataset.tab === state.activeTab);
@@ -688,11 +697,11 @@
     const dealerMath = dealerStats(dealer);
     return [
       '<div class="dealer-math-strip">',
-      renderHeaderMetric("Dealer bust", formatPercent(dealerMath.bust)),
-      renderHeaderMetric("Dealer EV", formatScore(dealerMath.expectedScore)),
-      renderHeaderMetric("Made avg", formatScore(dealerMath.madeAverage)),
+      renderHeaderMetric("Dealer goes over 21", formatPercent(dealerMath.bust)),
+      renderHeaderMetric("Dealer average final total", formatScore(dealerMath.expectedScore)),
+      renderHeaderMetric("Dealer average when not bust", formatScore(dealerMath.madeAverage)),
       '</div>',
-      '<p class="math-note">Dealer EV treats bust as 0. Made avg ignores busts.</p>'
+      '<p class="math-note">A bust counts as 0 in the average final total. The not-bust average only looks at dealer hands from 17 to 21.</p>'
     ].join("");
   }
 
@@ -717,7 +726,7 @@
       renderBasicItem("Card values", "Number cards keep their value, face cards count as 10, and an ace counts as 11 or 1."),
       renderBasicItem("Turn order", "The player acts first. The dealer then draws until 17 and stands on soft 17 in this trainer."),
       renderBasicItem("Main actions", "Hit takes a card, stand keeps the total, double adds one final card, and split separates a pair."),
-      renderBasicItem("Tie / push", "A push means your final total ties the dealer. You do not win or lose that bet."),
+      renderBasicItem("Tie", "A tie means your total equals the dealer total. You keep your bet; it is not a win or a loss. Casino players often call this a push."),
       '</div>',
       '</section>'
     ].join("");
@@ -765,6 +774,7 @@
   function renderMathPanel(row, dealer) {
     const stand = standOutcome(row, dealer);
     const hit = hitOnceOutcome(row, dealer);
+    const hitAverage = outcomeEv(hit);
     const totalLabel = (stand.soft ? "Soft " : "Hard ") + stand.total;
     return [
       '<div class="math-panel">',
@@ -773,12 +783,12 @@
       '<span>' + totalLabel + ' vs dealer ' + dealer + '</span>',
       '</div>',
       '<div class="math-grid">',
-      renderMetric("Win if stood", formatPercent(stand.win)),
+      renderMetric("Win chance if you stand", formatPercent(stand.win)),
       renderMetric("Tie chance", formatPercent(stand.push)),
-      renderMetric("Win if hit", formatPercent(hit.win)),
-      renderMetric("Hit EV", formatEv(outcomeEv(hit))),
+      renderMetric("Win chance after one hit", formatPercent(hit.win)),
+      renderMetric("Average result after one hit", formatEv(hitAverage)),
       '</div>',
-      '<p class="math-note">Tie chance was previously labeled push. Hit EV is a one-card-hit estimate where win = +1, tie = 0, loss = -1.</p>',
+      '<p class="math-note">' + averageResultExplanation(hitAverage) + '</p>',
       '</div>'
     ].join("");
   }
