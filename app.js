@@ -920,10 +920,7 @@
       '<div class="practice-card">',
       '<p class="muted">' + scenario.kindLabel + '</p>',
       '<h2>' + scenario.row.label + ' vs dealer ' + scenario.dealer + '</h2>',
-      '<div class="large-hand">',
-      renderCardRow(scenario.row.cards),
-      '<div class="dealer-card">' + scenario.dealer + '</div>',
-      '</div>',
+      renderPracticeHands(scenario),
       '<div class="action-row">',
       ACTION_ORDER.map(function (action) {
         return '<button class="action-button" type="button" data-practice-answer="' + action + '">' + ACTIONS[action].label + '</button>';
@@ -942,6 +939,24 @@
     ].join("");
   }
 
+  function renderPracticeHands(scenario) {
+    return [
+      '<div class="practice-hands">',
+      '<div class="practice-hand-row">',
+      '<span class="hand-label">Your hand</span>',
+      renderCardRow(scenario.row.cards),
+      '</div>',
+      '<div class="practice-hand-row">',
+      '<span class="hand-label">Dealer hand</span>',
+      '<div class="card-row">',
+      renderPlayingCard(scenario.dealer, "H"),
+      renderHiddenCard(),
+      '</div>',
+      '</div>',
+      '</div>'
+    ].join("");
+  }
+
   function renderPracticeFeedback() {
     const feedback = state.practiceFeedback;
     if (!feedback) {
@@ -952,6 +967,9 @@
       '<div class="feedback ' + tone + '">',
       '<strong>' + (feedback.correct ? "Correct" : "Not this time") + '</strong>',
       '<p>The play is ' + describeAction(feedback.action) + '. ' + feedback.explanation + '</p>',
+      '<div class="controls-row">',
+      '<button class="primary-button" type="button" data-action="new-hand">Next hand</button>',
+      '</div>',
       '</div>'
     ].join("");
   }
@@ -1043,6 +1061,14 @@
       '<div class="playing-card ' + (red ? "red" : "black") + '">',
       '<span>' + rank + '</span>',
       '<span>' + suit + '</span>',
+      '</div>'
+    ].join("");
+  }
+
+  function renderHiddenCard() {
+    return [
+      '<div class="playing-card card-back" aria-label="Hidden dealer card">',
+      '<span>?</span>',
       '</div>'
     ].join("");
   }

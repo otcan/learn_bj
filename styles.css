@@ -532,9 +532,21 @@ h1 {
   color: #1c2227;
 }
 
+.playing-card.card-back {
+  border-color: #0a4736;
+  background: repeating-linear-gradient(45deg, #0f6b4f 0 7px, #126245 7px 14px);
+  color: #fff;
+}
+
 .playing-card span:last-child {
   justify-self: end;
   font-size: 0.75rem;
+}
+
+.playing-card.card-back span:last-child {
+  align-self: center;
+  justify-self: center;
+  font-size: 1.35rem;
 }
 
 .action-row {
@@ -637,6 +649,25 @@ h1 {
 .practice-card {
   margin-top: 16px;
   padding: 18px;
+}
+
+.practice-hands {
+  display: grid;
+  gap: 14px;
+  margin: 18px 0;
+}
+
+.practice-hand-row {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: 14px;
+  align-items: center;
+}
+
+.hand-label {
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-weight: 850;
 }
 
 .large-hand {
@@ -817,6 +848,11 @@ th:first-child {
 
   .action-button {
     flex: 1 1 42%;
+  }
+
+  .practice-hand-row {
+    grid-template-columns: 1fr;
+    gap: 6px;
   }
 
   .dealer-math-strip {
