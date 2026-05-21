@@ -296,6 +296,62 @@
 
   state.selectedDealer = state.progress.currentDealer || "2";
 
+  function applyRouteFromHash() {
+    const route = window.location.hash.replace(/^#\/?/, "");
+    const parts = route.split("/").filter(Boolean);
+    const first = parts[0];
+
+    if (!first) {
+      return false;
+    }
+
+    if (first === "learn") {
+      state.activeTab = "learn";
+      if (DEALERS.includes(parts[1])) {
+        state.selectedDealer = parts[1];
+      }
+      return true;
+    }
+
+    if (first === "practice") {
+      state.activeTab = "practice";
+      state.practiceScenario = makePracticeScenario();
+      return true;
+    }
+
+    if (first === "chart") {
+      state.activeTab = "chart";
+      if (ROW_GROUPS[parts[1]]) {
+        state.chartMode = parts[1];
+      }
+      return true;
+    }
+
+    return false;
+  }
+
+  function routeForState() {
+    if (state.activeTab === "learn") {
+      return "#/learn/" + state.selectedDealer;
+    }
+    if (state.activeTab === "chart") {
+      return "#/chart/" + state.chartMode;
+    }
+    return "#/practice";
+  }
+
+  function syncUrl(replace) {
+    const route = routeForState();
+    if (window.location.hash === route) {
+      return;
+    }
+    if (replace) {
+      window.history.replaceState(null, "", route);
+      return;
+    }
+    window.history.pushState(null, "", route);
+  }
+
   function loadProgress() {
     try {
       const raw = window.localStorage.getItem(STORAGE_KEY);
@@ -342,7 +398,7 @@
     if (index === 0) {
       return true;
     }
-    return isComplete(dealer) || isComplete(DEALERS[index - 1]);
+    return dealer === state.selectedDealer || isComplete(dealer) || isComplete(DEALERS[index - 1]);
   }
 
   function nextDealer(dealer) {
@@ -451,7 +507,10 @@
   }
 
   function standOutcome(row, dealer) {
-    const player = handState(row.cards);
+    return standOutcomeForState(handState(row.cards), dealer);
+  }
+
+  function standOutcomeForState(player, dealer) {
     const distribution = dealerDistribution(dealer);
     const outcome = {
       total: player.total,
@@ -480,12 +539,43 @@
     return outcome;
   }
 
+  function hitOnceOutcome(row, dealer) {
+    const player = handState(row.cards);
+    const outcome = {
+      win: 0,
+      push: 0,
+      lose: 0
+    };
+
+    CARD_DRAWS.forEach(function (draw) {
+      const next = normalizeHand({
+        total: player.total + draw.value,
+        softAces: player.softAces + (draw.rank === "A" ? 1 : 0)
+      });
+      const nextOutcome = next.total > 21 ? { win: 0, push: 0, lose: 1 } : standOutcomeForState(next, dealer);
+      outcome.win += nextOutcome.win * draw.probability;
+      outcome.push += nextOutcome.push * draw.probability;
+      outcome.lose += nextOutcome.lose * draw.probability;
+    });
+
+    return outcome;
+  }
+
+  function outcomeEv(outcome) {
+    return outcome.win - outcome.lose;
+  }
+
   function formatPercent(value) {
     return Math.round(value * 1000) / 10 + "%";
   }
 
   function formatScore(value) {
     return (Math.round(value * 10) / 10).toFixed(1);
+  }
+
+  function formatEv(value) {
+    const rounded = (Math.round(value * 100) / 100).toFixed(2);
+    return value > 0 ? "+" + rounded : rounded;
   }
 
   function render() {
@@ -572,6 +662,7 @@
       '<h2>' + note.headline + '</h2>',
       '<p>' + note.summary + '</p>',
       score ? '<p class="muted">Best quiz score: ' + score + '/4</p>' : "",
+      renderDealerMathStrip(dealer),
       '</div>',
       '<div class="felt-table" aria-hidden="true">',
       '<div class="dealer-card">' + dealer + '</div>',
@@ -593,6 +684,27 @@
     ].join(""));
   }
 
+  function renderDealerMathStrip(dealer) {
+    const dealerMath = dealerStats(dealer);
+    return [
+      '<div class="dealer-math-strip">',
+      renderHeaderMetric("Dealer bust", formatPercent(dealerMath.bust)),
+      renderHeaderMetric("Dealer EV", formatScore(dealerMath.expectedScore)),
+      renderHeaderMetric("Made avg", formatScore(dealerMath.madeAverage)),
+      '</div>',
+      '<p class="math-note">Dealer EV treats bust as 0. Made avg ignores busts.</p>'
+    ].join("");
+  }
+
+  function renderHeaderMetric(label, value) {
+    return [
+      '<div class="header-metric">',
+      '<span>' + label + '</span>',
+      '<strong>' + value + '</strong>',
+      '</div>'
+    ].join("");
+  }
+
   function renderBasicsSection() {
     return [
       '<section class="section basics-section">',
@@ -605,6 +717,7 @@
       renderBasicItem("Card values", "Number cards keep their value, face cards count as 10, and an ace counts as 11 or 1."),
       renderBasicItem("Turn order", "The player acts first. The dealer then draws until 17 and stands on soft 17 in this trainer."),
       renderBasicItem("Main actions", "Hit takes a card, stand keeps the total, double adds one final card, and split separates a pair."),
+      renderBasicItem("Tie / push", "A push means your final total ties the dealer. You do not win or lose that bet."),
       '</div>',
       '</section>'
     ].join("");
@@ -651,7 +764,7 @@
 
   function renderMathPanel(row, dealer) {
     const stand = standOutcome(row, dealer);
-    const dealerMath = dealerStats(dealer);
+    const hit = hitOnceOutcome(row, dealer);
     const totalLabel = (stand.soft ? "Soft " : "Hard ") + stand.total;
     return [
       '<div class="math-panel">',
@@ -661,11 +774,11 @@
       '</div>',
       '<div class="math-grid">',
       renderMetric("Win if stood", formatPercent(stand.win)),
-      renderMetric("Push", formatPercent(stand.push)),
-      renderMetric("Dealer bust", formatPercent(dealerMath.bust)),
-      renderMetric("Dealer EV", formatScore(dealerMath.expectedScore)),
+      renderMetric("Tie chance", formatPercent(stand.push)),
+      renderMetric("Win if hit", formatPercent(hit.win)),
+      renderMetric("Hit EV", formatEv(outcomeEv(hit))),
       '</div>',
-      '<p class="math-note">Dealer EV treats bust as 0; made-hand average is ' + formatScore(dealerMath.madeAverage) + '.</p>',
+      '<p class="math-note">Tie chance was previously labeled push. Hit EV is a one-card-hit estimate where win = +1, tie = 0, loss = -1.</p>',
       '</div>'
     ].join("");
   }
@@ -898,6 +1011,7 @@
     if (tab === "practice") {
       state.practiceScenario = makePracticeScenario();
     }
+    syncUrl(false);
     render();
   }
 
@@ -921,6 +1035,7 @@
     state.practiceScenario = null;
     state.practiceFeedback = null;
     saveProgress();
+    syncUrl(false);
     render();
   }
 
@@ -949,12 +1064,14 @@
       state.quizAnswers = {};
       state.quizSubmitted = false;
       saveProgress();
+      syncUrl(false);
       render();
       return;
     }
 
     if (target.dataset.chartMode) {
       state.chartMode = target.dataset.chartMode;
+      syncUrl(false);
       render();
       return;
     }
@@ -1019,6 +1136,7 @@
         state.quizAnswers = {};
         state.quizSubmitted = false;
         saveProgress();
+        syncUrl(false);
         render();
       }
       return;
@@ -1028,6 +1146,16 @@
       resetProgress();
     }
   });
+
+  window.addEventListener("hashchange", function () {
+    if (applyRouteFromHash()) {
+      render();
+    }
+  });
+
+  if (!applyRouteFromHash()) {
+    syncUrl(true);
+  }
 
   render();
 })();

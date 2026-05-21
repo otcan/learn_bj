@@ -14,3 +14,11 @@ Ruleset used by the MVP:
 Progress, quiz scores, and practice stats are stored in browser local storage.
 
 Lesson cards include an infinite-deck estimate of the dealer outcome distribution, dealer bust chance, dealer expected score, and the example hand's win chance if it stood.
+
+Shareable app URLs use hash routes:
+
+- `#/learn/2`
+- `#/practice`
+- `#/chart/hard`
+- `#/chart/soft`
+- `#/chart/pair`

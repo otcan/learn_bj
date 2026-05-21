@@ -265,6 +265,33 @@ h1 {
   font-size: 1rem;
 }
 
+.dealer-math-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  max-width: 620px;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.header-metric {
+  border: 1px solid rgba(15, 107, 79, 0.25);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.72);
+  padding: 10px 12px;
+}
+
+.header-metric span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.header-metric strong {
+  display: block;
+  font-size: 1.28rem;
+  line-height: 1.15;
+}
+
 .felt-table {
   display: flex;
   align-items: center;
@@ -320,7 +347,7 @@ h1 {
 
 .basics-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 12px;
 }
 
@@ -729,6 +756,10 @@ th:first-child {
     min-height: 132px;
   }
 
+  .dealer-math-strip {
+    max-width: none;
+  }
+
   .lesson-grid,
   .quiz-grid,
   .basics-grid {
@@ -768,6 +799,7 @@ th:first-child {
     flex: 1 1 42%;
   }
 
+  .dealer-math-strip,
   .math-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
