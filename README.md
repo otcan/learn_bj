@@ -12,3 +12,5 @@ Ruleset used by the MVP:
 - No surrender
 
 Progress, quiz scores, and practice stats are stored in browser local storage.
+
+Lesson cards include an infinite-deck estimate of the dealer outcome distribution, dealer bust chance, dealer expected score, and the example hand's win chance if it stood.

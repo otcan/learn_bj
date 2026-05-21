@@ -318,6 +318,27 @@ h1 {
   gap: 12px;
 }
 
+.basics-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.basic-item {
+  border-left: 3px solid var(--green);
+  padding: 3px 0 3px 12px;
+}
+
+.basic-item strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.basic-item p {
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
 .lesson-card,
 .quiz-item,
 .feedback,
@@ -370,6 +391,54 @@ h1 {
 
 .action-split {
   background: var(--red);
+}
+
+.math-panel {
+  margin-top: 13px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.math-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.math-heading span,
+.math-note,
+.math-metric span {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.math-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.math-metric {
+  min-width: 0;
+  border-left: 1px solid var(--line);
+  padding-left: 8px;
+}
+
+.math-metric:first-child {
+  border-left: 0;
+  padding-left: 0;
+}
+
+.math-metric strong {
+  display: block;
+  font-size: 1.05rem;
+  line-height: 1.1;
+}
+
+.math-note {
+  margin-top: 8px;
 }
 
 .quiz-grid {
@@ -661,7 +730,8 @@ th:first-child {
   }
 
   .lesson-grid,
-  .quiz-grid {
+  .quiz-grid,
+  .basics-grid {
     grid-template-columns: 1fr;
   }
 }
@@ -696,5 +766,14 @@ th:first-child {
 
   .action-button {
     flex: 1 1 42%;
+  }
+
+  .math-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .math-metric:nth-child(odd) {
+    border-left: 0;
+    padding-left: 0;
   }
 }

@@ -30,6 +30,19 @@
       verb: "split into two hands"
     }
   };
+  const CARD_DRAWS = [
+    { rank: "A", value: 11, probability: 1 / 13 },
+    { rank: "2", value: 2, probability: 1 / 13 },
+    { rank: "3", value: 3, probability: 1 / 13 },
+    { rank: "4", value: 4, probability: 1 / 13 },
+    { rank: "5", value: 5, probability: 1 / 13 },
+    { rank: "6", value: 6, probability: 1 / 13 },
+    { rank: "7", value: 7, probability: 1 / 13 },
+    { rank: "8", value: 8, probability: 1 / 13 },
+    { rank: "9", value: 9, probability: 1 / 13 },
+    { rank: "10", value: 10, probability: 4 / 13 }
+  ];
+  const DEALER_DISTRIBUTION_CACHE = {};
 
   const DEALER_NOTES = {
     "2": {
@@ -356,6 +369,125 @@
     return row.why + " Against dealer " + dealer + ", " + DEALER_NOTES[dealer].pressure + " Basic strategy says to " + ACTIONS[action].verb + ".";
   }
 
+  function cardValue(rank) {
+    return rank === "A" ? 11 : Math.min(parseInt(rank, 10) || 10, 10);
+  }
+
+  function handState(cards) {
+    const state = cards.reduce(function (nextState, rank) {
+      const isAce = rank === "A";
+      nextState.total += isAce ? 11 : cardValue(rank);
+      nextState.softAces += isAce ? 1 : 0;
+      return normalizeHand(nextState);
+    }, { total: 0, softAces: 0 });
+    return state;
+  }
+
+  function normalizeHand(state) {
+    while (state.total > 21 && state.softAces > 0) {
+      state.total -= 10;
+      state.softAces -= 1;
+    }
+    return state;
+  }
+
+  function addToDistribution(target, source, weight) {
+    Object.keys(source).forEach(function (key) {
+      target[key] = (target[key] || 0) + source[key] * weight;
+    });
+  }
+
+  function dealerDistribution(dealer) {
+    if (DEALER_DISTRIBUTION_CACHE[dealer]) {
+      return DEALER_DISTRIBUTION_CACHE[dealer];
+    }
+    const state = handState([dealer]);
+    const distribution = dealerDrawDistribution(state.total, state.softAces);
+    DEALER_DISTRIBUTION_CACHE[dealer] = distribution;
+    return distribution;
+  }
+
+  function dealerDrawDistribution(total, softAces) {
+    const cacheKey = total + ":" + softAces;
+    if (DEALER_DISTRIBUTION_CACHE[cacheKey]) {
+      return DEALER_DISTRIBUTION_CACHE[cacheKey];
+    }
+    if (total > 21) {
+      return { bust: 1 };
+    }
+    if (total >= 17) {
+      const stood = {};
+      stood[total] = 1;
+      return stood;
+    }
+
+    const distribution = {};
+    CARD_DRAWS.forEach(function (draw) {
+      const next = normalizeHand({
+        total: total + draw.value,
+        softAces: softAces + (draw.rank === "A" ? 1 : 0)
+      });
+      addToDistribution(distribution, dealerDrawDistribution(next.total, next.softAces), draw.probability);
+    });
+    DEALER_DISTRIBUTION_CACHE[cacheKey] = distribution;
+    return distribution;
+  }
+
+  function dealerStats(dealer) {
+    const distribution = dealerDistribution(dealer);
+    const bust = distribution.bust || 0;
+    let expectedScore = 0;
+    let madeWeightedScore = 0;
+    [17, 18, 19, 20, 21].forEach(function (total) {
+      const probability = distribution[total] || 0;
+      expectedScore += total * probability;
+      madeWeightedScore += total * probability;
+    });
+    return {
+      bust: bust,
+      expectedScore: expectedScore,
+      madeAverage: (1 - bust) > 0 ? madeWeightedScore / (1 - bust) : 0
+    };
+  }
+
+  function standOutcome(row, dealer) {
+    const player = handState(row.cards);
+    const distribution = dealerDistribution(dealer);
+    const outcome = {
+      total: player.total,
+      soft: player.softAces > 0,
+      win: 0,
+      push: 0,
+      lose: 0
+    };
+
+    if (player.total > 21) {
+      outcome.lose = 1;
+      return outcome;
+    }
+
+    outcome.win += distribution.bust || 0;
+    [17, 18, 19, 20, 21].forEach(function (dealerTotal) {
+      const probability = distribution[dealerTotal] || 0;
+      if (player.total > dealerTotal) {
+        outcome.win += probability;
+      } else if (player.total === dealerTotal) {
+        outcome.push += probability;
+      } else {
+        outcome.lose += probability;
+      }
+    });
+    return outcome;
+  }
+
+  function formatPercent(value) {
+    return Math.round(value * 1000) / 10 + "%";
+  }
+
+  function formatScore(value) {
+    return (Math.round(value * 10) / 10).toFixed(1);
+  }
+
   function render() {
     tabButtons.forEach(function (button) {
       button.classList.toggle("active", button.dataset.tab === state.activeTab);
@@ -445,6 +577,7 @@
       '<div class="dealer-card">' + dealer + '</div>',
       '</div>',
       '</div>',
+      renderBasicsSection(),
       renderLessonSection("Hard Totals", "Hands without a flexible ace.", HARD_ROWS, dealer),
       renderLessonSection("Soft Totals", "Hands where an ace can count as 11.", SOFT_ROWS, dealer),
       renderLessonSection("Pairs", "Two equal ranks before any hit.", PAIR_ROWS, dealer),
@@ -458,6 +591,32 @@
       '</div>',
       '</section>'
     ].join(""));
+  }
+
+  function renderBasicsSection() {
+    return [
+      '<section class="section basics-section">',
+      '<div class="section-heading">',
+      '<h3>Game Basics</h3>',
+      '<p class="section-subtitle">The minimum rules behind every strategy choice.</p>',
+      '</div>',
+      '<div class="basics-grid">',
+      renderBasicItem("Goal", "Get closer to 21 than the dealer without going over. Going over 21 busts immediately."),
+      renderBasicItem("Card values", "Number cards keep their value, face cards count as 10, and an ace counts as 11 or 1."),
+      renderBasicItem("Turn order", "The player acts first. The dealer then draws until 17 and stands on soft 17 in this trainer."),
+      renderBasicItem("Main actions", "Hit takes a card, stand keeps the total, double adds one final card, and split separates a pair."),
+      '</div>',
+      '</section>'
+    ].join("");
+  }
+
+  function renderBasicItem(title, copy) {
+    return [
+      '<article class="basic-item">',
+      '<strong>' + title + '</strong>',
+      '<p>' + copy + '</p>',
+      '</article>'
+    ].join("");
   }
 
   function renderLessonSection(title, subtitle, rows, dealer) {
@@ -485,7 +644,38 @@
       renderActionPill(action),
       '</div>',
       '<p>' + explain(row, dealer) + '</p>',
+      renderMathPanel(row, dealer),
       '</article>'
+    ].join("");
+  }
+
+  function renderMathPanel(row, dealer) {
+    const stand = standOutcome(row, dealer);
+    const dealerMath = dealerStats(dealer);
+    const totalLabel = (stand.soft ? "Soft " : "Hard ") + stand.total;
+    return [
+      '<div class="math-panel">',
+      '<div class="math-heading">',
+      '<strong>Example math</strong>',
+      '<span>' + totalLabel + ' vs dealer ' + dealer + '</span>',
+      '</div>',
+      '<div class="math-grid">',
+      renderMetric("Win if stood", formatPercent(stand.win)),
+      renderMetric("Push", formatPercent(stand.push)),
+      renderMetric("Dealer bust", formatPercent(dealerMath.bust)),
+      renderMetric("Dealer EV", formatScore(dealerMath.expectedScore)),
+      '</div>',
+      '<p class="math-note">Dealer EV treats bust as 0; made-hand average is ' + formatScore(dealerMath.madeAverage) + '.</p>',
+      '</div>'
+    ].join("");
+  }
+
+  function renderMetric(label, value) {
+    return [
+      '<div class="math-metric">',
+      '<span>' + label + '</span>',
+      '<strong>' + value + '</strong>',
+      '</div>'
     ].join("");
   }
 
