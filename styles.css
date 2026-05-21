@@ -435,33 +435,53 @@ h1 {
 }
 
 .math-heading span,
-.math-note,
-.math-metric span {
+.math-note {
   color: var(--muted);
   font-size: 0.82rem;
 }
 
-.math-grid {
+.outcome-table {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
+  grid-template-columns: minmax(74px, 1.2fr) repeat(3, minmax(48px, 1fr));
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fffaf2;
 }
 
-.math-metric {
+.outcome-head,
+.outcome-label,
+.outcome-value {
   min-width: 0;
-  border-left: 1px solid var(--line);
-  padding-left: 8px;
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  padding: 8px;
 }
 
-.math-metric:first-child {
-  border-left: 0;
-  padding-left: 0;
+.outcome-head:nth-child(4n),
+.outcome-label:nth-child(4n),
+.outcome-value:nth-child(4n) {
+  border-right: 0;
 }
 
-.math-metric strong {
-  display: block;
-  font-size: 1.05rem;
-  line-height: 1.1;
+.outcome-table > :nth-last-child(-n + 4) {
+  border-bottom: 0;
+}
+
+.outcome-head {
+  background: #f2eadf;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.outcome-label {
+  font-weight: 850;
+}
+
+.outcome-value {
+  font-weight: 850;
+  text-align: center;
 }
 
 .math-note {
@@ -799,13 +819,7 @@ th:first-child {
     flex: 1 1 42%;
   }
 
-  .dealer-math-strip,
-  .math-grid {
+  .dealer-math-strip {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .math-metric:nth-child(odd) {
-    border-left: 0;
-    padding-left: 0;
   }
 }

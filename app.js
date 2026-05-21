@@ -48,7 +48,7 @@
     "2": {
       headline: "Dealer shows 2",
       summary: "A 2 is weak, but it is the least scary of the small dealer cards. Stand on many stiff hard totals, double clear value hands, and do not force marginal soft doubles.",
-      pressure: "Dealer 2 creates some bust pressure, but not enough to overplay every borderline hand."
+      pressure: "Dealer 2 can still build a good hand, so weak totals often need help."
     },
     "3": {
       headline: "Dealer shows 3",
@@ -144,7 +144,7 @@
       label: "Hard 12",
       cards: ["10", "2"],
       actions: table("H", { S: ["4", "5", "6"] }),
-      why: "Hard 12 is fragile; it stands only into the dealer's strongest bust cards."
+      why: "Hard 12 is weak, but hitting is usually safer than waiting. Stand only against dealer 4-6, where dealer bust pressure is high."
     },
     {
       id: "hard-13-16",
@@ -422,7 +422,7 @@
 
   function explain(row, dealer) {
     const action = actionFor(row, dealer);
-    return row.why + " Against dealer " + dealer + ", " + DEALER_NOTES[dealer].pressure + " Basic strategy says to " + ACTIONS[action].verb + ".";
+    return row.why + " " + DEALER_NOTES[dealer].pressure + " Basic strategy says to " + ACTIONS[action].verb + ".";
   }
 
   function cardValue(rank) {
@@ -561,30 +561,12 @@
     return outcome;
   }
 
-  function outcomeEv(outcome) {
-    return outcome.win - outcome.lose;
-  }
-
   function formatPercent(value) {
     return Math.round(value * 1000) / 10 + "%";
   }
 
   function formatScore(value) {
     return (Math.round(value * 10) / 10).toFixed(1);
-  }
-
-  function formatEv(value) {
-    const rounded = (Math.round(value * 100) / 100).toFixed(2);
-    return value > 0 ? "+" + rounded : rounded;
-  }
-
-  function averageResultExplanation(value) {
-    const cents = Math.round(Math.abs(value) * 100);
-    if (cents === 0) {
-      return "Average result uses +1 for win, 0 for tie, -1 for loss. Here, " + formatEv(value) + " means roughly breaking even per $1 bet.";
-    }
-    const direction = value > 0 ? "winning" : "losing";
-    return "Average result uses +1 for win, 0 for tie, -1 for loss. Here, " + formatEv(value) + " means " + direction + " about " + cents + " cents per $1 bet on average.";
   }
 
   function render() {
@@ -774,7 +756,6 @@
   function renderMathPanel(row, dealer) {
     const stand = standOutcome(row, dealer);
     const hit = hitOnceOutcome(row, dealer);
-    const hitAverage = outcomeEv(hit);
     const totalLabel = (stand.soft ? "Soft " : "Hard ") + stand.total;
     return [
       '<div class="math-panel">',
@@ -782,23 +763,31 @@
       '<strong>Example math</strong>',
       '<span>' + totalLabel + ' vs dealer ' + dealer + '</span>',
       '</div>',
-      '<div class="math-grid">',
-      renderMetric("Win chance if you stand", formatPercent(stand.win)),
-      renderMetric("Tie chance", formatPercent(stand.push)),
-      renderMetric("Win chance after one hit", formatPercent(hit.win)),
-      renderMetric("Average result after one hit", formatEv(hitAverage)),
-      '</div>',
-      '<p class="math-note">' + averageResultExplanation(hitAverage) + '</p>',
+      renderOutcomeTable(stand, hit),
+      '<p class="math-note">Hit once means take one card, then compare the new total with the dealer. All values are percentages. A tie returns your bet, so lower Lose can matter even when Win is close.</p>',
       '</div>'
     ].join("");
   }
 
-  function renderMetric(label, value) {
+  function renderOutcomeTable(stand, hit) {
     return [
-      '<div class="math-metric">',
-      '<span>' + label + '</span>',
-      '<strong>' + value + '</strong>',
+      '<div class="outcome-table" aria-label="Outcome comparison">',
+      '<div class="outcome-head">Choice</div>',
+      '<div class="outcome-head">Win</div>',
+      '<div class="outcome-head">Tie</div>',
+      '<div class="outcome-head">Lose</div>',
+      renderOutcomeRow("Stand", stand),
+      renderOutcomeRow("Hit once", hit),
       '</div>'
+    ].join("");
+  }
+
+  function renderOutcomeRow(label, outcome) {
+    return [
+      '<div class="outcome-label">' + label + '</div>',
+      '<div class="outcome-value">' + formatPercent(outcome.win) + '</div>',
+      '<div class="outcome-value">' + formatPercent(outcome.push) + '</div>',
+      '<div class="outcome-value">' + formatPercent(outcome.lose) + '</div>'
     ].join("");
   }
 
