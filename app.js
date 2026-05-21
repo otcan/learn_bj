@@ -561,6 +561,52 @@
     return outcome;
   }
 
+  function optimalHitStandOutcome(row, dealer) {
+    return bestHitStandOutcome(handState(row.cards), dealer, {});
+  }
+
+  function bestHitStandOutcome(player, dealer, memo) {
+    if (player.total > 21) {
+      return { win: 0, push: 0, lose: 1 };
+    }
+
+    const key = dealer + ":" + player.total + ":" + player.softAces;
+    if (memo[key]) {
+      return memo[key];
+    }
+
+    const stand = standOutcomeForState(player, dealer);
+    const hit = hitBestOutcomeForState(player, dealer, memo);
+    const best = outcomeScore(hit) > outcomeScore(stand) ? hit : stand;
+    memo[key] = best;
+    return best;
+  }
+
+  function hitBestOutcomeForState(player, dealer, memo) {
+    const outcome = {
+      win: 0,
+      push: 0,
+      lose: 0
+    };
+
+    CARD_DRAWS.forEach(function (draw) {
+      const next = normalizeHand({
+        total: player.total + draw.value,
+        softAces: player.softAces + (draw.rank === "A" ? 1 : 0)
+      });
+      const nextOutcome = bestHitStandOutcome(next, dealer, memo);
+      outcome.win += nextOutcome.win * draw.probability;
+      outcome.push += nextOutcome.push * draw.probability;
+      outcome.lose += nextOutcome.lose * draw.probability;
+    });
+
+    return outcome;
+  }
+
+  function outcomeScore(outcome) {
+    return outcome.win - outcome.lose;
+  }
+
   function formatPercent(value) {
     return Math.round(value * 1000) / 10 + "%";
   }
@@ -756,20 +802,16 @@
   function renderMathPanel(row, dealer) {
     const stand = standOutcome(row, dealer);
     const hit = hitOnceOutcome(row, dealer);
-    const totalLabel = (stand.soft ? "Soft " : "Hard ") + stand.total;
+    const optimal = optimalHitStandOutcome(row, dealer);
     return [
       '<div class="math-panel">',
-      '<div class="math-heading">',
-      '<strong>Example math</strong>',
-      '<span>' + totalLabel + ' vs dealer ' + dealer + '</span>',
-      '</div>',
-      renderOutcomeTable(stand, hit),
-      '<p class="math-note">Hit once means take one card, then compare the new total with the dealer. All values are percentages. A tie returns your bet, so lower Lose can matter even when Win is close.</p>',
+      renderOutcomeTable(stand, hit, optimal),
+      '<p class="math-note">Hit once stops after one card. Optimal strategy keeps choosing the better hit-or-stand path after each card. All values are percentages.</p>',
       '</div>'
     ].join("");
   }
 
-  function renderOutcomeTable(stand, hit) {
+  function renderOutcomeTable(stand, hit, optimal) {
     return [
       '<div class="outcome-table" aria-label="Outcome comparison">',
       '<div class="outcome-head">Choice</div>',
@@ -778,6 +820,7 @@
       '<div class="outcome-head">Lose</div>',
       renderOutcomeRow("Stand", stand),
       renderOutcomeRow("Hit once", hit),
+      renderOutcomeRow("Optimal strategy", optimal),
       '</div>'
     ].join("");
   }
