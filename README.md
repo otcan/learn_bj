@@ -6,12 +6,6 @@ Visit the live site:
 
 https://otcan.github.io/learn_bj/
 
-Direct links:
-
-- Dealer lesson: https://otcan.github.io/learn_bj/#/learn/2
-- Practice: https://otcan.github.io/learn_bj/#/practice
-- Strategy chart: https://otcan.github.io/learn_bj/#/chart
-
 For local use, open `index.html` in a browser, or serve the folder with any static file server.
 
 ## Screenshots

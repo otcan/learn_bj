@@ -47,7 +47,7 @@
   const DEALER_NOTES = {
     "2": {
       headline: "Dealer shows 2",
-      summary: "A 2 is weak, but it is the least scary of the small dealer cards. Stand on many stiff hard totals, double clear value hands, and do not force marginal soft doubles.",
+      summary: "A 2 is the least scary of the small dealer cards. Stand on many stiff hard totals, double clear value hands, and do not force marginal soft doubles.",
       pressure: "Dealer 2 can still build a good hand, so weak totals often need help."
     },
     "3": {
