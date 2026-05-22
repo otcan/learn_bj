@@ -94,6 +94,34 @@ h1 {
   color: var(--muted);
 }
 
+.topbar-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.repo-link {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 0 12px;
+  color: var(--green-dark);
+  font-size: 0.88rem;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.repo-link:hover,
+.repo-link:focus-visible {
+  border-color: var(--green);
+  outline: 0;
+  background: #e5f4ee;
+}
+
 .ruleset {
   flex: 0 0 auto;
   border: 1px solid var(--line);
@@ -828,8 +856,18 @@ th:first-child {
     align-items: stretch;
   }
 
-  .ruleset {
+  .topbar-actions {
     width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .repo-link {
+    flex: 1 1 150px;
+    justify-content: center;
+  }
+
+  .ruleset {
+    flex: 1 1 240px;
     text-align: center;
   }
 
