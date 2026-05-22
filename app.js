@@ -296,6 +296,16 @@
     { type: "soft", id: "soft-18" },
     { type: "pair", id: "pair-8" }
   ];
+  const PRACTICE_CARD_OPTIONS = {
+    "hard-5-8": [["3", "2"], ["4", "2"], ["5", "2"], ["5", "3"]],
+    "hard-13-16": [["10", "3"], ["10", "4"], ["10", "5"], ["10", "6"]],
+    "hard-17-plus": [["10", "7"], ["10", "8"], ["10", "9"], ["10", "10"]],
+    "soft-13-14": [["A", "2"], ["A", "3"]],
+    "soft-15-16": [["A", "4"], ["A", "5"]],
+    "soft-19-plus": [["A", "8"], ["A", "9"]],
+    "pair-10": [["10", "10"], ["J", "J"], ["Q", "Q"], ["K", "K"]],
+    "pair-2-3": [["2", "2"], ["3", "3"]]
+  };
 
   const SUITS = ["S", "H", "D", "C"];
   const app = document.getElementById("app");
@@ -432,6 +442,22 @@
 
   function describeAction(action) {
     return ACTIONS[action].label;
+  }
+
+  function randomPracticeCards(row) {
+    const options = PRACTICE_CARD_OPTIONS[row.id] || [row.cards];
+    const cards = options[Math.floor(Math.random() * options.length)];
+    return cards.slice();
+  }
+
+  function exactHandLabel(cards, type) {
+    if (type === "pair") {
+      return cards[0] + "," + cards[1];
+    }
+
+    const hand = handState(cards);
+    const labelType = hand.softAces > 0 ? "Soft" : "Hard";
+    return labelType + " " + hand.total;
   }
 
   function explain(row, dealer) {
@@ -911,7 +937,7 @@
 
     return [
       '<article class="quiz-item">',
-      '<strong>' + row.label + ' vs dealer ' + dealer + '</strong>',
+      '<strong>' + exactHandLabel(row.cards, item.type) + ' vs dealer ' + dealer + '</strong>',
       '<div class="hand-line">',
       renderCardRow(row.cards),
       '<span class="muted">Dealer ' + dealer + '</span>',
@@ -962,7 +988,7 @@
       '</div>',
       '<div class="practice-card">',
       '<p class="muted">' + scenario.kindLabel + '</p>',
-      '<h2>' + scenario.row.label + ' vs dealer ' + scenario.dealer + '</h2>',
+      '<h2>' + scenario.handLabel + ' vs dealer ' + scenario.dealer + '</h2>',
       renderPracticeHands(scenario),
       '<div class="action-row">',
       ACTION_ORDER.map(function (action) {
@@ -987,7 +1013,7 @@
       '<div class="practice-hands">',
       '<div class="practice-hand-row">',
       '<span class="hand-label">Your hand</span>',
-      renderCardRow(scenario.row.cards),
+      renderCardRow(scenario.cards),
       '</div>',
       '<div class="practice-hand-row">',
       '<span class="hand-label">Dealer hand</span>',
@@ -1037,10 +1063,13 @@
     const type = typeNames[Math.floor(Math.random() * typeNames.length)];
     const rows = ROW_GROUPS[type];
     const row = rows[Math.floor(Math.random() * rows.length)];
+    const cards = randomPracticeCards(row);
     return {
       dealer: dealer,
       type: type,
       kindLabel: type === "pair" ? "Pair decision" : type.charAt(0).toUpperCase() + type.slice(1) + " total",
+      cards: cards,
+      handLabel: exactHandLabel(cards, type),
       row: row
     };
   }
