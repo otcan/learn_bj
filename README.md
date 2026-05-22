@@ -2,7 +2,31 @@
 
 A static, dealer-first blackjack basic strategy trainer.
 
-Open `index.html` in a browser, or serve the folder with any static file server.
+Visit the live site:
+
+https://otcan.github.io/learn_bj/
+
+Direct links:
+
+- Dealer lesson: https://otcan.github.io/learn_bj/#/learn/2
+- Practice: https://otcan.github.io/learn_bj/#/practice
+- Strategy chart: https://otcan.github.io/learn_bj/#/chart
+
+For local use, open `index.html` in a browser, or serve the folder with any static file server.
+
+## Screenshots
+
+### Dealer Lesson
+
+![Dealer lesson for dealer 2](screenshots/learn-dealer-2.png)
+
+### Practice
+
+![Practice screen](screenshots/practice.png)
+
+### Strategy Chart
+
+![Combined strategy chart](screenshots/strategy-chart.png)
 
 Ruleset used by the MVP:
 
