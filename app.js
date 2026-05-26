@@ -418,11 +418,7 @@
   }
 
   function isUnlocked(dealer) {
-    const index = dealerIndex(dealer);
-    if (index === 0) {
-      return true;
-    }
-    return dealer === state.selectedDealer || isComplete(dealer) || isComplete(DEALERS[index - 1]);
+    return DEALERS.includes(dealer);
   }
 
   function nextDealer(dealer) {
@@ -706,13 +702,13 @@
     return [
       '<aside class="side-panel">',
       '<div class="panel-header">',
-      '<div><h2>Dealer Path</h2><p class="muted">Unlock one upcard at a time.</p></div>',
+      '<div><h2>Dealer Upcards</h2><p class="muted">Study any dealer card from 2 through Ace.</p></div>',
       '</div>',
       '<div class="dealer-list">',
       DEALERS.map(renderDealerButton).join(""),
       '</div>',
       '<div class="stat-grid">',
-      '<div class="stat"><strong>' + completed + '</strong><span>Lessons done</span></div>',
+      '<div class="stat"><strong>' + completed + '/' + DEALERS.length + '</strong><span>Lessons reviewed</span></div>',
       '<div class="stat"><strong>' + accuracy + '%</strong><span>Practice accuracy</span></div>',
       '</div>',
       '<div class="controls-row">',
@@ -746,7 +742,6 @@
     const note = DEALER_NOTES[dealer];
     const score = state.progress.quizScores[dealer];
     const next = nextDealer(dealer);
-    const canMoveNext = next && isUnlocked(next);
 
     renderShell([
       '<section class="content-panel">',
@@ -768,10 +763,10 @@
       renderQuiz(dealer),
       '<div class="section">',
       '<div class="controls-row">',
-      '<button class="primary-button" type="button" data-action="complete-lesson" ' + (!state.quizSubmitted ? "disabled" : "") + '>Mark dealer ' + dealer + ' complete</button>',
-      canMoveNext ? '<button class="secondary-button" type="button" data-action="next-dealer">Next dealer: ' + next + '</button>' : "",
+      '<button class="primary-button" type="button" data-action="complete-lesson" ' + (!state.quizSubmitted ? "disabled" : "") + '>Mark dealer ' + dealer + ' reviewed</button>',
+      next ? '<button class="secondary-button" type="button" data-action="next-dealer">Next dealer: ' + next + '</button>' : "",
       '</div>',
-      !state.quizSubmitted ? '<p class="muted">Finish the quick check to complete this dealer lesson.</p>' : "",
+      !state.quizSubmitted ? '<p class="muted">Finish the quick check to mark this dealer lesson as reviewed.</p>' : "",
       '</div>',
       '</section>'
     ].join(""));
@@ -1044,16 +1039,7 @@
   }
 
   function practiceDealers() {
-    const dealers = state.progress.completedDealers.slice();
-    if (!dealers.includes(state.selectedDealer) && isUnlocked(state.selectedDealer)) {
-      dealers.push(state.selectedDealer);
-    }
-    if (!dealers.length) {
-      dealers.push("2");
-    }
-    return DEALERS.filter(function (dealer) {
-      return dealers.includes(dealer);
-    });
+    return DEALERS.slice();
   }
 
   function makePracticeScenario() {
