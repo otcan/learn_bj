@@ -363,11 +363,12 @@
     deviation: "Count changes"
   };
   const ASSESSMENT_COUNTS = {
-    strategy: 20,
-    value: 10,
-    running: 2,
-    deviation: 5
+    strategy: 8,
+    value: 4,
+    running: 1,
+    deviation: 3
   };
+  const ASSESSMENT_RUN_LENGTH = 8;
   const DEVIATION_EXAM_BANK = [
     { type: "hard", rowId: "hard-13-16", dealer: "10", cards: ["10", "6"], trueCount: 1 },
     { type: "hard", rowId: "hard-12", dealer: "4", cards: ["10", "2"], trueCount: -1 },
@@ -410,6 +411,7 @@
     countingRunFinishedAt: 0,
     countingRunTransition: 0,
     assessmentSession: null,
+    assessmentShareCopied: false,
     progress: loadProgress()
   };
 
@@ -445,6 +447,17 @@
 
     if (first === "assessment") {
       state.activeTab = "assessment";
+      if (parts[1] === "result" && parts[2]) {
+        state.assessmentSession = {
+          status: "shared",
+          result: decodeAssessmentShare(parts[2]),
+          questions: [],
+          answers: [],
+          index: 0
+        };
+      } else if (state.assessmentSession && state.assessmentSession.status === "shared") {
+        state.assessmentSession = null;
+      }
       return true;
     }
 
@@ -467,6 +480,9 @@
       return "#/counting";
     }
     if (state.activeTab === "assessment") {
+      if (state.assessmentSession && state.assessmentSession.status === "shared" && state.assessmentSession.result) {
+        return "#/assessment/result/" + encodeAssessmentShare(state.assessmentSession.result);
+      }
       return "#/assessment";
     }
     return "#/practice";
@@ -1777,11 +1793,11 @@
   function makeRunningCountAssessmentQuestions(count) {
     const questions = [];
     for (let index = 0; index < count; index += 1) {
-      const cards = makeRandomCountSequence(12);
+      const cards = makeRandomCountSequence(ASSESSMENT_RUN_LENGTH);
       questions.push({
         kind: "running",
         section: ASSESSMENT_SECTIONS.running,
-        prompt: "Keep the running count through this 12-card stream.",
+        prompt: "Keep the running count through this " + ASSESSMENT_RUN_LENGTH + "-card stream.",
         cards: cards,
         cardIndex: 0,
         correct: String(countSequenceTotal(cards))
@@ -1859,6 +1875,40 @@
       return question.cardIndex >= question.cards.length && Boolean(answer);
     }
     return Boolean(answer);
+  }
+
+  function liveAssessmentStats(session) {
+    const sections = {};
+    Object.keys(ASSESSMENT_SECTIONS).forEach(function (key) {
+      sections[key] = {
+        label: ASSESSMENT_SECTIONS[key],
+        correct: 0,
+        answered: 0
+      };
+    });
+
+    let answered = 0;
+    let correct = 0;
+    session.answers.forEach(function (answer, index) {
+      const question = session.questions[index];
+      if (!answer || !question) {
+        return;
+      }
+      answered += 1;
+      sections[question.kind].answered += 1;
+      if (answer.correct) {
+        correct += 1;
+        sections[question.kind].correct += 1;
+      }
+    });
+
+    return {
+      answered: answered,
+      correct: correct,
+      total: session.questions.length,
+      percent: answered ? Math.round((correct / answered) * 100) : 0,
+      sections: sections
+    };
   }
 
   function advanceAssessment() {
@@ -1977,6 +2027,97 @@
     const scenario = question.scenario;
     const countLabel = question.kind === "deviation" ? " at TC " + formatCount(question.trueCount) : "";
     return scenario.handLabel + " vs dealer " + scenario.dealer + countLabel + ": " + ACTIONS[question.correct].label;
+  }
+
+  function assessmentCorrectLabel(question) {
+    if (question.kind === "value" || question.kind === "running") {
+      return formatCount(parseInt(question.correct, 10));
+    }
+    return ACTIONS[question.correct].label;
+  }
+
+  function compactAssessmentResult(result) {
+    const clean = sanitizeAssessmentResult(result);
+    return {
+      completedAt: clean.completedAt,
+      totalCorrect: clean.totalCorrect,
+      totalQuestions: clean.totalQuestions,
+      totalPercent: clean.totalPercent,
+      level: clean.level,
+      sections: clean.sections,
+      averageValueMs: clean.averageValueMs,
+      recommendation: clean.recommendation,
+      missed: clean.missed
+    };
+  }
+
+  function sanitizeNumber(value, fallback) {
+    const number = parseInt(value, 10);
+    return Number.isFinite(number) ? number : fallback;
+  }
+
+  function sanitizeShareText(value, maxLength) {
+    return String(value || "")
+      .slice(0, maxLength)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function sanitizeAssessmentResult(result) {
+    if (!result) {
+      return null;
+    }
+    const sections = {};
+    Object.keys(ASSESSMENT_SECTIONS).forEach(function (key) {
+      const source = result.sections && result.sections[key] ? result.sections[key] : {};
+      sections[key] = {
+        label: ASSESSMENT_SECTIONS[key],
+        correct: sanitizeNumber(source.correct, 0),
+        total: sanitizeNumber(source.total, 0),
+        percent: sanitizeNumber(source.percent, 0)
+      };
+    });
+    return {
+      completedAt: sanitizeShareText(result.completedAt, 40),
+      totalCorrect: sanitizeNumber(result.totalCorrect, 0),
+      totalQuestions: sanitizeNumber(result.totalQuestions, 0),
+      totalPercent: sanitizeNumber(result.totalPercent, 0),
+      level: sanitizeShareText(result.level, 40),
+      sections: sections,
+      averageValueMs: sanitizeNumber(result.averageValueMs, 0),
+      recommendation: sanitizeShareText(result.recommendation, 220),
+      missed: Array.isArray(result.missed) ? result.missed.slice(0, 8).map(function (item) {
+        return sanitizeShareText(item, 140);
+      }) : []
+    };
+  }
+
+  function encodeAssessmentShare(result) {
+    try {
+      return window.btoa(JSON.stringify(compactAssessmentResult(result)))
+        .replace(/\+/g, "-")
+        .replace(/\//g, "_")
+        .replace(/=+$/, "");
+    } catch (error) {
+      return "";
+    }
+  }
+
+  function decodeAssessmentShare(payload) {
+    try {
+      const base64 = payload.replace(/-/g, "+").replace(/_/g, "/");
+      const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
+      return sanitizeAssessmentResult(JSON.parse(window.atob(padded)));
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function assessmentShareUrl(result) {
+    return window.location.origin + window.location.pathname + "#/assessment/result/" + encodeAssessmentShare(result);
   }
 
   function renderCounting() {
@@ -2232,7 +2373,11 @@
       return;
     }
     if (session && session.status === "complete") {
-      renderAssessmentResults(session.result);
+      renderAssessmentResults(session.result, false);
+      return;
+    }
+    if (session && session.status === "shared") {
+      renderAssessmentResults(session.result, true);
       return;
     }
     renderAssessmentIntro();
@@ -2249,7 +2394,7 @@
       '<div class="assessment-overview">',
       renderAssessmentOverviewItem("Basic strategy", ASSESSMENT_COUNTS.strategy, "Random hard totals, soft totals, pairs, and dealer upcards."),
       renderAssessmentOverviewItem("Card values", ASSESSMENT_COUNTS.value, "Quick Hi-Lo +1, 0, and -1 recognition."),
-      renderAssessmentOverviewItem("Running count", ASSESSMENT_COUNTS.running, "Two 12-card streams with final count answers."),
+      renderAssessmentOverviewItem("Running count", ASSESSMENT_COUNTS.running, "One " + ASSESSMENT_RUN_LENGTH + "-card stream with a final count answer."),
       renderAssessmentOverviewItem("Count changes", ASSESSMENT_COUNTS.deviation, "Common Hi-Lo index decisions after basic strategy."),
       '</div>',
       latest ? renderLatestAssessment(latest) : "",
@@ -2292,8 +2437,28 @@
       '<button class="secondary-button" type="button" data-action="cancel-assessment">Exit assessment</button>',
       '</div>',
       '<div class="assessment-progress"><span style="width: ' + Math.round((session.index / session.questions.length) * 100) + '%"></span></div>',
+      renderAssessmentLiveSummary(session),
       renderAssessmentQuestionBody(question),
       '</section>'
+    ].join("");
+  }
+
+  function renderAssessmentLiveSummary(session) {
+    const stats = liveAssessmentStats(session);
+    return [
+      '<div class="assessment-live-summary">',
+      '<div class="live-score-main">',
+      '<span>Live score</span>',
+      '<strong>' + stats.correct + '/' + stats.answered + '</strong>',
+      '<small>' + (stats.answered ? stats.percent + "% correct" : "Answer to start scoring") + '</small>',
+      '</div>',
+      '<div class="live-score-sections">',
+      Object.keys(stats.sections).map(function (key) {
+        const section = stats.sections[key];
+        return '<span>' + section.label + ': <strong>' + section.correct + '/' + section.answered + '</strong></span>';
+      }).join(""),
+      '</div>',
+      '</div>'
     ].join("");
   }
 
@@ -2316,6 +2481,7 @@
       question.kind === "deviation" ? '<div class="count-chip">True count ' + formatCount(question.trueCount) + '</div>' : "",
       renderPracticeTable(scenario),
       renderAssessmentActionChoices(question),
+      renderAssessmentAnswerFeedback(question),
       renderAssessmentNextRow(),
       '</div>'
     ].join("");
@@ -2330,6 +2496,12 @@
         const classes = ["action-button"];
         if (answer && answer.selected === action) {
           classes.push("selected");
+        }
+        if (answer && action === question.correct) {
+          classes.push("correct");
+        }
+        if (answer && answer.selected === action && action !== question.correct) {
+          classes.push("incorrect");
         }
         return '<button class="' + classes.join(" ") + '" type="button" data-assessment-answer="' + action + '">' + ACTIONS[action].label + '</button>';
       }).join(""),
@@ -2351,9 +2523,16 @@
         if (answer && answer.selected === String(value)) {
           classes.push("selected-count");
         }
+        if (answer && String(value) === String(question.correct)) {
+          classes.push("answer-correct");
+        }
+        if (answer && answer.selected === String(value) && String(value) !== String(question.correct)) {
+          classes.push("answer-incorrect");
+        }
         return '<button class="' + classes.join(" ") + '" type="button" data-assessment-answer="' + value + '">' + formatCount(value) + '</button>';
       }).join(""),
       '</div>',
+      renderAssessmentAnswerFeedback(question),
       renderAssessmentNextRow(),
       '</div>'
     ].join("");
@@ -2379,6 +2558,7 @@
         '<button class="primary-button" type="button" data-action="assessment-next-run-card">Next card</button>',
         '</div>'
       ].join(""),
+      done ? renderAssessmentAnswerFeedback(question) : "",
       done ? renderAssessmentNextRow() : "",
       '</div>'
     ].join("");
@@ -2394,9 +2574,28 @@
         if (answer && answer.selected === String(value)) {
           classes.push("selected");
         }
+        if (answer && String(value) === String(question.correct)) {
+          classes.push("answer-correct");
+        }
+        if (answer && answer.selected === String(value) && String(value) !== String(question.correct)) {
+          classes.push("answer-incorrect");
+        }
         return '<button class="' + classes.join(" ") + '" type="button" data-assessment-running-answer="' + value + '">' + formatCount(value) + '</button>';
       }).join(""),
       '</div>',
+      '</div>'
+    ].join("");
+  }
+
+  function renderAssessmentAnswerFeedback(question) {
+    const answer = currentAssessmentAnswer();
+    if (!answer) {
+      return "";
+    }
+    return [
+      '<div class="assessment-answer-feedback ' + (answer.correct ? "good" : "bad") + '">',
+      '<strong>' + (answer.correct ? "Correct" : "Not this one") + '</strong>',
+      '<span>Correct answer: ' + assessmentCorrectLabel(question) + '</span>',
       '</div>'
     ].join("");
   }
@@ -2411,12 +2610,25 @@
     ].join("");
   }
 
-  function renderAssessmentResults(result) {
+  function renderAssessmentResults(result, shared) {
+    result = sanitizeAssessmentResult(result);
+    if (!result) {
+      app.innerHTML = [
+        '<section class="assessment-panel">',
+        '<div class="panel-header">',
+        '<div><h2>Assessment Result</h2><p class="muted">This shared result link is invalid.</p></div>',
+        '<button class="primary-button" type="button" data-action="start-assessment">Take assessment</button>',
+        '</div>',
+        '</section>'
+      ].join("");
+      return;
+    }
+    const shareUrl = assessmentShareUrl(result);
     app.innerHTML = [
       '<section class="assessment-panel">',
       '<div class="panel-header">',
-      '<div><h2>Assessment Result</h2><p class="muted">' + result.totalCorrect + ' of ' + result.totalQuestions + ' correct</p></div>',
-      '<button class="primary-button" type="button" data-action="start-assessment">Retake assessment</button>',
+      '<div><h2>' + (shared ? "Shared Assessment Result" : "Assessment Result") + '</h2><p class="muted">' + result.totalCorrect + ' of ' + result.totalQuestions + ' correct</p></div>',
+      '<button class="primary-button" type="button" data-action="start-assessment">' + (shared ? "Take assessment" : "Retake assessment") + '</button>',
       '</div>',
       '<div class="result-hero">',
       '<span>Skill level</span>',
@@ -2424,15 +2636,38 @@
       '<p>' + result.totalPercent + '% overall</p>',
       '</div>',
       renderAssessmentResultGrid(result),
+      renderAssessmentShareList(result),
       '<div class="assessment-recommendation">',
       '<strong>Recommended next step</strong>',
       '<p>' + result.recommendation + '</p>',
       '</div>',
       result.missed.length ? renderAssessmentMisses(result.missed) : "",
+      '<div class="share-result-box">',
+      '<strong>Share result page</strong>',
+      '<p>This link contains the result in the URL. No account or server is needed.</p>',
+      '<a class="secondary-link-button" href="' + shareUrl + '">Open share page</a>',
+      '<button class="secondary-button" type="button" data-action="copy-assessment-link" data-share-url="' + shareUrl + '">' + (state.assessmentShareCopied ? "Copied" : "Copy link") + '</button>',
+      '</div>',
       '<div class="controls-row">',
       '<button class="secondary-button" type="button" data-action="close-assessment-result">Back to assessment</button>',
       '</div>',
       '</section>'
+    ].join("");
+  }
+
+  function renderAssessmentShareList(result) {
+    return [
+      '<div class="assessment-share-list">',
+      '<strong>Share summary</strong>',
+      '<ul>',
+      '<li>Overall: ' + result.totalPercent + '% (' + result.level + ')</li>',
+      Object.keys(result.sections).map(function (key) {
+        const section = result.sections[key];
+        return '<li>' + section.label + ': ' + section.correct + '/' + section.total + ' (' + section.percent + '%)</li>';
+      }).join(""),
+      '<li>Card speed: ' + (result.averageValueMs ? formatSeconds(result.averageValueMs) : "not recorded") + '</li>',
+      '</ul>',
+      '</div>'
     ].join("");
   }
 
@@ -2751,6 +2986,7 @@
 
     if (target.dataset.action === "start-assessment") {
       state.assessmentSession = makeAssessmentSession();
+      state.assessmentShareCopied = false;
       syncUrl(false);
       render();
       return;
@@ -2764,18 +3000,32 @@
         answers: [],
         index: 0
       };
+      state.assessmentShareCopied = false;
       render();
       return;
     }
 
     if (target.dataset.action === "cancel-assessment") {
       state.assessmentSession = null;
+      syncUrl(false);
       render();
       return;
     }
 
     if (target.dataset.action === "close-assessment-result") {
       state.assessmentSession = null;
+      state.assessmentShareCopied = false;
+      syncUrl(false);
+      render();
+      return;
+    }
+
+    if (target.dataset.action === "copy-assessment-link") {
+      const shareUrl = target.dataset.shareUrl;
+      if (shareUrl && window.navigator.clipboard) {
+        window.navigator.clipboard.writeText(shareUrl).catch(function () {});
+      }
+      state.assessmentShareCopied = true;
       render();
       return;
     }
