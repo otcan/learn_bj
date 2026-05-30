@@ -42,7 +42,9 @@
     { rank: "9", value: 9, probability: 1 / 13 },
     { rank: "10", value: 10, probability: 4 / 13 }
   ];
+  CARD_DRAWS.cacheKey = "tc0";
   const COUNT_CHOICES = [1, 0, -1];
+  const COUNT_EXAMPLES = [-3, 0, 3];
   const COUNT_RUN_TYPES = {
     short: {
       label: "12 cards",
@@ -329,6 +331,31 @@
     "pair-10": [["10", "10"], ["J", "J"], ["Q", "Q"], ["K", "K"]],
     "pair-2-3": [["2", "2"], ["3", "3"]]
   };
+  const COUNT_DEVIATIONS = [
+    { rowId: "hard-13-16", dealer: "10", total: 16, hand: "Hard 16", base: "H", action: "S", compare: "gte", index: 0, rule: "Stand at TC 0 or higher." },
+    { rowId: "hard-13-16", dealer: "10", total: 15, hand: "Hard 15", base: "H", action: "S", compare: "gte", index: 4, rule: "Stand at TC +4 or higher." },
+    { rowId: "pair-10", dealer: "5", hand: "10,10", base: "S", action: "P", compare: "gte", index: 5, rule: "Split at TC +5 or higher." },
+    { rowId: "pair-10", dealer: "6", hand: "10,10", base: "S", action: "P", compare: "gte", index: 4, rule: "Split at TC +4 or higher." },
+    { rowId: "hard-10", dealer: "10", total: 10, hand: "Hard 10", base: "H", action: "D", compare: "gte", index: 4, rule: "Double at TC +4 or higher." },
+    { rowId: "hard-12", dealer: "3", total: 12, hand: "Hard 12", base: "H", action: "S", compare: "gte", index: 2, rule: "Stand at TC +2 or higher." },
+    { rowId: "hard-12", dealer: "2", total: 12, hand: "Hard 12", base: "H", action: "S", compare: "gte", index: 3, rule: "Stand at TC +3 or higher." },
+    { rowId: "hard-11", dealer: "A", total: 11, hand: "Hard 11", base: "H", action: "D", compare: "gte", index: 1, rule: "Double at TC +1 or higher." },
+    { rowId: "hard-9", dealer: "2", total: 9, hand: "Hard 9", base: "H", action: "D", compare: "gte", index: 1, rule: "Double at TC +1 or higher." },
+    { rowId: "hard-10", dealer: "A", total: 10, hand: "Hard 10", base: "H", action: "D", compare: "gte", index: 4, rule: "Double at TC +4 or higher." },
+    { rowId: "hard-9", dealer: "7", total: 9, hand: "Hard 9", base: "H", action: "D", compare: "gte", index: 3, rule: "Double at TC +3 or higher." },
+    { rowId: "hard-13-16", dealer: "9", total: 16, hand: "Hard 16", base: "H", action: "S", compare: "gte", index: 5, rule: "Stand at TC +5 or higher." },
+    { rowId: "hard-13-16", dealer: "2", total: 13, hand: "Hard 13", base: "S", action: "H", compare: "lt", index: -1, rule: "Hit below TC -1." },
+    { rowId: "hard-12", dealer: "4", total: 12, hand: "Hard 12", base: "S", action: "H", compare: "lt", index: 0, rule: "Hit below TC 0." },
+    { rowId: "hard-12", dealer: "5", total: 12, hand: "Hard 12", base: "S", action: "H", compare: "lt", index: -2, rule: "Hit below TC -2." },
+    { rowId: "hard-12", dealer: "6", total: 12, hand: "Hard 12", base: "S", action: "H", compare: "lt", index: -1, rule: "Hit below TC -1." },
+    { rowId: "hard-13-16", dealer: "3", total: 13, hand: "Hard 13", base: "S", action: "H", compare: "lt", index: -2, rule: "Hit below TC -2." }
+  ];
+  const INSURANCE_DEVIATION = {
+    hand: "Insurance",
+    dealer: "A",
+    action: "Take insurance",
+    rule: "Take insurance at TC +3 or higher."
+  };
 
   const SUITS = ["S", "H", "D", "C"];
   const COUNT_RANKS = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
@@ -534,6 +561,14 @@
     return state;
   }
 
+  function rankKey(rank) {
+    return ["10", "J", "Q", "K"].includes(rank) ? "10" : rank;
+  }
+
+  function isSplittableCards(cards) {
+    return cards.length === 2 && rankKey(cards[0]) === rankKey(cards[1]);
+  }
+
   function normalizeHand(state) {
     while (state.total > 21 && state.softAces > 0) {
       state.total -= 10;
@@ -542,24 +577,64 @@
     return state;
   }
 
+  function drawCacheKey(draws) {
+    return (draws || CARD_DRAWS).cacheKey || "tc0";
+  }
+
+  function countAdjustedDraws(trueCount) {
+    if (trueCount === 0) {
+      return CARD_DRAWS;
+    }
+
+    const cacheKey = "tc" + trueCount;
+    if (countAdjustedDraws.cache[cacheKey]) {
+      return countAdjustedDraws.cache[cacheKey];
+    }
+
+    const clamped = Math.max(-5, Math.min(5, trueCount));
+    const shift = clamped * 0.018;
+    const lowMass = (5 / 13) - shift;
+    const neutralMass = 3 / 13;
+    const highMass = 1 - lowMass - neutralMass;
+    const draws = [
+      { rank: "A", value: 11, probability: highMass / 5 },
+      { rank: "2", value: 2, probability: lowMass / 5 },
+      { rank: "3", value: 3, probability: lowMass / 5 },
+      { rank: "4", value: 4, probability: lowMass / 5 },
+      { rank: "5", value: 5, probability: lowMass / 5 },
+      { rank: "6", value: 6, probability: lowMass / 5 },
+      { rank: "7", value: 7, probability: neutralMass / 3 },
+      { rank: "8", value: 8, probability: neutralMass / 3 },
+      { rank: "9", value: 9, probability: neutralMass / 3 },
+      { rank: "10", value: 10, probability: highMass * 4 / 5 }
+    ];
+    draws.cacheKey = cacheKey;
+    countAdjustedDraws.cache[cacheKey] = draws;
+    return draws;
+  }
+  countAdjustedDraws.cache = {};
+
   function addToDistribution(target, source, weight) {
     Object.keys(source).forEach(function (key) {
       target[key] = (target[key] || 0) + source[key] * weight;
     });
   }
 
-  function dealerDistribution(dealer) {
-    if (DEALER_DISTRIBUTION_CACHE[dealer]) {
-      return DEALER_DISTRIBUTION_CACHE[dealer];
+  function dealerDistribution(dealer, draws) {
+    const drawSet = draws || CARD_DRAWS;
+    const cacheKey = drawCacheKey(drawSet) + ":dealer:" + dealer;
+    if (DEALER_DISTRIBUTION_CACHE[cacheKey]) {
+      return DEALER_DISTRIBUTION_CACHE[cacheKey];
     }
     const state = handState([dealer]);
-    const distribution = dealerDrawDistribution(state.total, state.softAces);
-    DEALER_DISTRIBUTION_CACHE[dealer] = distribution;
+    const distribution = dealerDrawDistribution(state.total, state.softAces, drawSet);
+    DEALER_DISTRIBUTION_CACHE[cacheKey] = distribution;
     return distribution;
   }
 
-  function dealerDrawDistribution(total, softAces) {
-    const cacheKey = total + ":" + softAces;
+  function dealerDrawDistribution(total, softAces, draws) {
+    const drawSet = draws || CARD_DRAWS;
+    const cacheKey = drawCacheKey(drawSet) + ":draw:" + total + ":" + softAces;
     if (DEALER_DISTRIBUTION_CACHE[cacheKey]) {
       return DEALER_DISTRIBUTION_CACHE[cacheKey];
     }
@@ -573,19 +648,19 @@
     }
 
     const distribution = {};
-    CARD_DRAWS.forEach(function (draw) {
+    drawSet.forEach(function (draw) {
       const next = normalizeHand({
         total: total + draw.value,
         softAces: softAces + (draw.rank === "A" ? 1 : 0)
       });
-      addToDistribution(distribution, dealerDrawDistribution(next.total, next.softAces), draw.probability);
+      addToDistribution(distribution, dealerDrawDistribution(next.total, next.softAces, drawSet), draw.probability);
     });
     DEALER_DISTRIBUTION_CACHE[cacheKey] = distribution;
     return distribution;
   }
 
-  function dealerStats(dealer) {
-    const distribution = dealerDistribution(dealer);
+  function dealerStats(dealer, draws) {
+    const distribution = dealerDistribution(dealer, draws);
     const bust = distribution.bust || 0;
     let expectedScore = 0;
     let madeWeightedScore = 0;
@@ -601,12 +676,16 @@
     };
   }
 
-  function standOutcome(row, dealer) {
-    return standOutcomeForState(handState(row.cards), dealer);
+  function standOutcome(row, dealer, draws) {
+    return standOutcomeForCards(row.cards, dealer, draws);
   }
 
-  function standOutcomeForState(player, dealer) {
-    const distribution = dealerDistribution(dealer);
+  function standOutcomeForCards(cards, dealer, draws) {
+    return standOutcomeForState(handState(cards), dealer, draws);
+  }
+
+  function standOutcomeForState(player, dealer, draws) {
+    const distribution = dealerDistribution(dealer, draws);
     const outcome = {
       total: player.total,
       soft: player.softAces > 0,
@@ -634,20 +713,25 @@
     return outcome;
   }
 
-  function hitOnceOutcome(row, dealer) {
-    const player = handState(row.cards);
+  function hitOnceOutcome(row, dealer, draws) {
+    return hitOnceOutcomeForCards(row.cards, dealer, draws);
+  }
+
+  function hitOnceOutcomeForCards(cards, dealer, draws) {
+    const drawSet = draws || CARD_DRAWS;
+    const player = handState(cards);
     const outcome = {
       win: 0,
       push: 0,
       lose: 0
     };
 
-    CARD_DRAWS.forEach(function (draw) {
+    drawSet.forEach(function (draw) {
       const next = normalizeHand({
         total: player.total + draw.value,
         softAces: player.softAces + (draw.rank === "A" ? 1 : 0)
       });
-      const nextOutcome = next.total > 21 ? { win: 0, push: 0, lose: 1 } : standOutcomeForState(next, dealer);
+      const nextOutcome = next.total > 21 ? { win: 0, push: 0, lose: 1 } : standOutcomeForState(next, dealer, drawSet);
       outcome.win += nextOutcome.win * draw.probability;
       outcome.push += nextOutcome.push * draw.probability;
       outcome.lose += nextOutcome.lose * draw.probability;
@@ -656,13 +740,73 @@
     return outcome;
   }
 
-  function optimalHitStandOutcome(row, dealer) {
-    return bestHitStandOutcome(handState(row.cards), dealer, {});
+  function hitOptimalOutcomeForCards(cards, dealer, draws) {
+    const drawSet = draws || CARD_DRAWS;
+    const player = handState(cards);
+    const outcome = {
+      win: 0,
+      push: 0,
+      lose: 0
+    };
+
+    drawSet.forEach(function (draw) {
+      const next = normalizeHand({
+        total: player.total + draw.value,
+        softAces: player.softAces + (draw.rank === "A" ? 1 : 0)
+      });
+      const nextOutcome = bestHitStandOutcome(next, dealer, {}, drawSet);
+      outcome.win += nextOutcome.win * draw.probability;
+      outcome.push += nextOutcome.push * draw.probability;
+      outcome.lose += nextOutcome.lose * draw.probability;
+    });
+
+    return outcome;
   }
 
-  function overallOptimalOutcome(dealer) {
+  function splitOutcomeForCards(cards, dealer, draws) {
+    const drawSet = draws || CARD_DRAWS;
+    const firstRank = cards[0];
+    const outcome = {
+      win: 0,
+      push: 0,
+      lose: 0,
+      perSplitHand: true
+    };
+
+    drawSet.forEach(function (draw) {
+      const next = handState([firstRank, draw.rank]);
+      const nextOutcome = bestHitStandOutcome(next, dealer, {}, drawSet);
+      outcome.win += nextOutcome.win * draw.probability;
+      outcome.push += nextOutcome.push * draw.probability;
+      outcome.lose += nextOutcome.lose * draw.probability;
+    });
+
+    return outcome;
+  }
+
+  function outcomeForAction(cards, dealer, action, draws) {
+    if (action === "S") {
+      return standOutcomeForCards(cards, dealer, draws);
+    }
+    if (action === "D") {
+      return hitOnceOutcomeForCards(cards, dealer, draws);
+    }
+    if (action === "P") {
+      if (!isSplittableCards(cards)) {
+        return { win: 0, push: 0, lose: 1, invalid: true };
+      }
+      return splitOutcomeForCards(cards, dealer, draws);
+    }
+    return hitOptimalOutcomeForCards(cards, dealer, draws);
+  }
+
+  function optimalHitStandOutcome(row, dealer, draws) {
+    return bestHitStandOutcome(handState(row.cards), dealer, {}, draws);
+  }
+
+  function overallOptimalOutcome(dealer, draws) {
     const total = LESSON_ROWS.reduce(function (summary, row) {
-      const outcome = optimalHitStandOutcome(row, dealer);
+      const outcome = optimalHitStandOutcome(row, dealer, draws);
       summary.win += outcome.win;
       summary.push += outcome.push;
       summary.lose += outcome.lose;
@@ -676,7 +820,8 @@
     };
   }
 
-  function bestHitStandOutcome(player, dealer, memo) {
+  function bestHitStandOutcome(player, dealer, memo, draws) {
+    const drawSet = draws || CARD_DRAWS;
     if (player.total > 21) {
       return { win: 0, push: 0, lose: 1 };
     }
@@ -686,26 +831,27 @@
       return memo[key];
     }
 
-    const stand = standOutcomeForState(player, dealer);
-    const hit = hitBestOutcomeForState(player, dealer, memo);
+    const stand = standOutcomeForState(player, dealer, drawSet);
+    const hit = hitBestOutcomeForState(player, dealer, memo, drawSet);
     const best = outcomeScore(hit) > outcomeScore(stand) ? hit : stand;
     memo[key] = best;
     return best;
   }
 
-  function hitBestOutcomeForState(player, dealer, memo) {
+  function hitBestOutcomeForState(player, dealer, memo, draws) {
+    const drawSet = draws || CARD_DRAWS;
     const outcome = {
       win: 0,
       push: 0,
       lose: 0
     };
 
-    CARD_DRAWS.forEach(function (draw) {
+    drawSet.forEach(function (draw) {
       const next = normalizeHand({
         total: player.total + draw.value,
         softAces: player.softAces + (draw.rank === "A" ? 1 : 0)
       });
-      const nextOutcome = bestHitStandOutcome(next, dealer, memo);
+      const nextOutcome = bestHitStandOutcome(next, dealer, memo, drawSet);
       outcome.win += nextOutcome.win * draw.probability;
       outcome.push += nextOutcome.push * draw.probability;
       outcome.lose += nextOutcome.lose * draw.probability;
@@ -716,6 +862,54 @@
 
   function outcomeScore(outcome) {
     return outcome.win - outcome.lose;
+  }
+
+  function deviationMatchesScenario(deviation, scenario) {
+    if (deviation.rowId !== scenario.row.id || deviation.dealer !== scenario.dealer) {
+      return false;
+    }
+    if (deviation.total === undefined) {
+      return true;
+    }
+    return handState(scenario.cards).total === deviation.total;
+  }
+
+  function countDeviationsForScenario(scenario) {
+    return COUNT_DEVIATIONS.filter(function (deviation) {
+      return deviationMatchesScenario(deviation, scenario);
+    });
+  }
+
+  function countDeviationsForChartCell(row, dealer) {
+    return COUNT_DEVIATIONS.filter(function (deviation) {
+      return deviation.rowId === row.id && deviation.dealer === dealer;
+    });
+  }
+
+  function deviationApplies(deviation, trueCount) {
+    if (deviation.compare === "lt") {
+      return trueCount < deviation.index;
+    }
+    return trueCount >= deviation.index;
+  }
+
+  function countAwareAction(scenario, trueCount) {
+    const base = actionFor(scenario.row, scenario.dealer);
+    const deviations = countDeviationsForScenario(scenario);
+    const active = deviations.find(function (deviation) {
+      return deviationApplies(deviation, trueCount);
+    });
+    return active ? active.action : base;
+  }
+
+  function countActionNote(scenario) {
+    const deviations = countDeviationsForScenario(scenario);
+    if (!deviations.length) {
+      return "No common Hi-Lo index change for this exact hand.";
+    }
+    return deviations.map(function (deviation) {
+      return deviation.hand + " vs " + deviation.dealer + ": " + deviation.rule;
+    }).join(" ");
   }
 
   function formatPercent(value) {
@@ -1322,12 +1516,8 @@
       '<div class="practice-card">',
       '<p class="muted">' + scenario.kindLabel + '</p>',
       '<h2>' + scenario.handLabel + ' vs dealer ' + scenario.dealer + '</h2>',
-      renderPracticeHands(scenario),
-      '<div class="action-row">',
-      ACTION_ORDER.map(function (action) {
-        return '<button class="action-button" type="button" data-practice-answer="' + action + '">' + ACTIONS[action].label + '</button>';
-      }).join(""),
-      '</div>',
+      renderPracticeTable(scenario),
+      renderPracticeActionButtons(scenario),
       renderPracticeFeedback(),
       '</div>',
       '</section>',
@@ -1341,22 +1531,57 @@
     ].join("");
   }
 
-  function renderPracticeHands(scenario) {
+  function renderPracticeTable(scenario) {
     return [
-      '<div class="practice-hands">',
-      '<div class="practice-hand-row">',
-      '<span class="hand-label">Your hand</span>',
-      renderCardRow(scenario.cards),
-      '</div>',
-      '<div class="practice-hand-row">',
-      '<span class="hand-label">Dealer hand</span>',
-      '<div class="card-row">',
+      '<div class="practice-table" aria-label="Blackjack table">',
+      '<div class="practice-table-row dealer-seat">',
+      '<span class="hand-label">Dealer</span>',
+      '<div class="card-row dealer-card-row">',
       renderPlayingCard(scenario.dealer, "H"),
       renderHiddenCard(),
       '</div>',
       '</div>',
+      '<div class="table-rail" aria-hidden="true"></div>',
+      '<div class="practice-table-row player-seat">',
+      '<span class="hand-label">Your hand</span>',
+      '<div>',
+      renderCardRow(scenario.cards),
+      '<strong class="table-hand-name">' + scenario.handLabel + '</strong>',
+      '</div>',
+      '</div>',
       '</div>'
     ].join("");
+  }
+
+  function renderPracticeActionButtons(scenario) {
+    const feedback = state.practiceFeedback;
+    const correct = actionFor(scenario.row, scenario.dealer);
+    return [
+      '<div class="action-row">',
+      practiceActionsForScenario(scenario).map(function (action) {
+        const classes = ["action-button"];
+        if (feedback && feedback.selected === action) {
+          classes.push("selected");
+        }
+        if (feedback && action === correct) {
+          classes.push("correct");
+        }
+        if (feedback && feedback.selected === action && action !== correct) {
+          classes.push("incorrect");
+        }
+        return '<button class="' + classes.join(" ") + '" type="button" data-practice-answer="' + action + '">' + ACTIONS[action].label + '</button>';
+      }).join(""),
+      '</div>'
+    ].join("");
+  }
+
+  function practiceActionsForScenario(scenario) {
+    if (scenario.type === "pair") {
+      return ACTION_ORDER;
+    }
+    return ACTION_ORDER.filter(function (action) {
+      return action !== "P";
+    });
   }
 
   function renderPracticeFeedback() {
@@ -1369,9 +1594,55 @@
       '<div class="feedback ' + tone + '">',
       '<strong>' + (feedback.correct ? "Correct" : "Not this time") + '</strong>',
       '<p>The play is ' + describeAction(feedback.action) + '. ' + feedback.explanation + '</p>',
+      renderPracticeOdds(feedback.scenario, feedback.selected),
       '<div class="controls-row">',
       '<button class="primary-button" type="button" data-action="new-hand">Next hand</button>',
       '</div>',
+      '</div>'
+    ].join("");
+  }
+
+  function renderPracticeOdds(scenario, selectedAction) {
+    const neutralOutcome = outcomeForAction(scenario.cards, scenario.dealer, selectedAction, countAdjustedDraws(0));
+    const splitNote = selectedAction === "P" || countDeviationsForScenario(scenario).some(function (deviation) {
+      return deviation.action === "P";
+    }) ? " Split odds are shown per split hand." : "";
+    return [
+      '<div class="practice-odds">',
+      '<div class="practice-odds-heading">',
+      '<strong>Winning chances</strong>',
+      '<span>Count 0 uses a neutral shoe. Count rows are Hi-Lo estimates.</span>',
+      '</div>',
+      '<div class="neutral-odds">',
+      '<span>Your selected play at count 0</span>',
+      '<strong>' + ACTIONS[selectedAction].label + ': ' + formatPercent(neutralOutcome.win) + ' win</strong>',
+      '<small>Tie ' + formatPercent(neutralOutcome.push) + ' | Lose ' + formatPercent(neutralOutcome.lose) + '</small>',
+      '</div>',
+      renderCountOddsTable(scenario),
+      '<p class="math-note">' + countActionNote(scenario) + ' High counts mean more tens and aces remain; low counts mean more small cards remain.' + splitNote + '</p>',
+      '</div>'
+    ].join("");
+  }
+
+  function renderCountOddsTable(scenario) {
+    return [
+      '<div class="count-odds-table" aria-label="Count adjusted outcomes">',
+      '<div class="count-odds-head">Count</div>',
+      '<div class="count-odds-head">Suggested play</div>',
+      '<div class="count-odds-head">Win</div>',
+      '<div class="count-odds-head">Tie</div>',
+      '<div class="count-odds-head">Lose</div>',
+      COUNT_EXAMPLES.map(function (trueCount) {
+        const action = countAwareAction(scenario, trueCount);
+        const outcome = outcomeForAction(scenario.cards, scenario.dealer, action, countAdjustedDraws(trueCount));
+        return [
+          '<div class="count-odds-cell">' + (trueCount === 0 ? "TC 0" : "TC " + formatCount(trueCount)) + '</div>',
+          '<div class="count-odds-cell"><strong>' + ACTIONS[action].label + '</strong></div>',
+          '<div class="count-odds-cell">' + formatPercent(outcome.win) + '</div>',
+          '<div class="count-odds-cell">' + formatPercent(outcome.push) + '</div>',
+          '<div class="count-odds-cell">' + formatPercent(outcome.lose) + '</div>'
+        ].join("");
+      }).join(""),
       '</div>'
     ].join("");
   }
@@ -1651,8 +1922,9 @@
       '<div><h2>Basic Strategy Chart</h2><p class="muted">S17, multi-deck, double after split, no surrender.</p></div>',
       '</div>',
       CHART_SECTIONS.map(renderChartSection).join(""),
+      renderCountDeviationGuide(),
       '<div class="chart-note">',
-      '<strong>Legend:</strong> H = Hit, S = Stand, D = Double, P = Split. When doubling is unavailable, play the hand as a hit unless local rules say otherwise.',
+      '<strong>Legend:</strong> H = Hit, S = Stand, D = Double, P = Split. A star means a common Hi-Lo index can change the play. When doubling is unavailable, play the hand as a hit unless local rules say otherwise.',
       '</div>',
       '</section>'
     ].join("");
@@ -1687,10 +1959,57 @@
       '<tr>',
       '<td>' + row.label + '</td>',
       DEALERS.map(function (dealer) {
-        const action = actionFor(row, dealer);
-        return '<td><span title="' + ACTIONS[action].label + '" class="chart-action ' + ACTIONS[action].className + '">' + ACTIONS[action].short + '</span></td>';
+        return renderChartCell(row, dealer);
       }).join(""),
       '</tr>'
+    ].join("");
+  }
+
+  function renderChartCell(row, dealer) {
+    const action = actionFor(row, dealer);
+    const deviations = countDeviationsForChartCell(row, dealer);
+    const classes = ["chart-action", ACTIONS[action].className];
+    const title = [ACTIONS[action].label].concat(deviations.map(function (deviation) {
+      return deviation.hand + ": " + deviation.rule;
+    })).join(" | ");
+    if (deviations.length) {
+      classes.push("count-sensitive");
+    }
+    return [
+      '<td>',
+      '<span title="' + title + '" class="' + classes.join(" ") + '">',
+      ACTIONS[action].short,
+      deviations.length ? '<sup>*</sup>' : "",
+      '</span>',
+      '</td>'
+    ].join("");
+  }
+
+  function renderCountDeviationGuide() {
+    return [
+      '<section class="count-deviation-guide">',
+      '<div class="section-heading chart-section-heading">',
+      '<h3>Count Changes</h3>',
+      '<p class="section-subtitle">Common Hi-Lo index plays. Use them after basic strategy feels automatic.</p>',
+      '</div>',
+      '<div class="deviation-grid">',
+      COUNT_DEVIATIONS.map(function (deviation) {
+        return [
+          '<article class="deviation-item">',
+          '<strong>' + deviation.hand + ' vs dealer ' + deviation.dealer + '</strong>',
+          '<span>' + ACTIONS[deviation.base].label + ' becomes ' + ACTIONS[deviation.action].label + '</span>',
+          '<p>' + deviation.rule + '</p>',
+          '</article>'
+        ].join("");
+      }).join(""),
+      '<article class="deviation-item">',
+      '<strong>' + INSURANCE_DEVIATION.hand + ' vs dealer ' + INSURANCE_DEVIATION.dealer + '</strong>',
+      '<span>' + INSURANCE_DEVIATION.action + '</span>',
+      '<p>' + INSURANCE_DEVIATION.rule + '</p>',
+      '</article>',
+      '</div>',
+      '<p class="math-note">Cells with ranges, like Hard 13-16, are starred when at least one exact total in that range has a count change.</p>',
+      '</section>'
     ].join("");
   }
 
@@ -1851,7 +2170,9 @@
       }
       state.practiceFeedback = {
         correct: isCorrect,
+        selected: target.dataset.practiceAnswer,
         action: correctAction,
+        scenario: scenario,
         explanation: explain(scenario.row, scenario.dealer)
       };
       saveProgress();
