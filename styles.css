@@ -183,6 +183,7 @@ h1 {
 .content-panel,
 .practice-panel,
 .chart-panel,
+.counting-panel,
 .summary-strip {
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -709,7 +710,8 @@ h1 {
 }
 
 .practice-panel,
-.chart-panel {
+.chart-panel,
+.counting-panel {
   padding: 22px;
 }
 
@@ -755,6 +757,185 @@ h1 {
   display: grid;
   gap: 12px;
   padding: 16px;
+}
+
+.counting-header {
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.counting-stats {
+  display: grid;
+  flex: 0 1 480px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.count-rule-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.count-rule {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-strong);
+  padding: 14px;
+}
+
+.count-rule strong {
+  display: block;
+  color: var(--green-dark);
+  font-size: 1.85rem;
+  line-height: 1;
+}
+
+.count-rule span {
+  display: block;
+  margin-top: 8px;
+  color: var(--ink);
+  font-weight: 850;
+}
+
+.count-rule p {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.counting-note {
+  margin-top: 12px;
+  border-left: 3px solid var(--green);
+  background: #f5fbf8;
+  padding: 11px 12px;
+  color: var(--muted);
+}
+
+.counting-note strong {
+  color: var(--ink);
+}
+
+.counting-mode-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 18px 0;
+}
+
+.mode-button {
+  min-height: 40px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: #fff;
+  padding: 0 14px;
+  color: var(--ink);
+  font-weight: 850;
+}
+
+.mode-button.active {
+  border-color: var(--green);
+  background: var(--green);
+  color: #fff;
+}
+
+.counting-drill {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-strong);
+  padding: 18px;
+}
+
+.drill-copy {
+  margin-bottom: 16px;
+}
+
+.drill-copy h3 {
+  font-size: 1.05rem;
+}
+
+.count-card-stage {
+  display: flex;
+  justify-content: center;
+  margin: 18px 0;
+}
+
+.large-count-card .playing-card {
+  width: 112px;
+  height: 154px;
+  border-radius: 10px;
+  padding: 12px;
+  font-size: 2rem;
+}
+
+.large-count-card .playing-card span:last-child {
+  font-size: 1rem;
+}
+
+.count-choice-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.count-choice {
+  min-height: 54px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--green-dark);
+  font-size: 1.15rem;
+  font-weight: 900;
+}
+
+.count-choice:hover,
+.mode-button:hover {
+  border-color: var(--green);
+}
+
+.count-choice:disabled {
+  cursor: not-allowed;
+  opacity: 0.56;
+}
+
+.count-sequence {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 14px 0 18px;
+}
+
+.count-input-row {
+  display: grid;
+  max-width: 260px;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-weight: 850;
+}
+
+.count-input {
+  min-height: 46px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: #fff;
+  padding: 0 12px;
+  color: var(--ink);
+  font-size: 1.1rem;
+  font-weight: 850;
+}
+
+.count-input:focus {
+  border-color: var(--green);
+  outline: 0;
+  box-shadow: 0 0 0 3px rgba(15, 107, 79, 0.15);
+}
+
+.deck-progress {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
 }
 
 .chart-section {
@@ -893,8 +1074,17 @@ th:first-child {
 
   .lesson-grid,
   .quiz-grid,
-  .basics-grid {
+  .basics-grid,
+  .count-rule-grid {
     grid-template-columns: 1fr;
+  }
+
+  .counting-header {
+    display: block;
+  }
+
+  .counting-stats {
+    margin-top: 14px;
   }
 }
 
@@ -914,7 +1104,8 @@ th:first-child {
   .hero-band,
   .section,
   .practice-panel,
-  .chart-panel {
+  .chart-panel,
+  .counting-panel {
     padding: 16px;
   }
 
@@ -941,6 +1132,12 @@ th:first-child {
 
   .overall-chance,
   .overall-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .counting-stats,
+  .deck-progress,
+  .count-choice-row {
     grid-template-columns: 1fr;
   }
 }

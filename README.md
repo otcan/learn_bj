@@ -1,6 +1,6 @@
 # Blackjack Learner
 
-A static, dealer-first blackjack basic strategy trainer covering dealer upcards 2 through Ace.
+A static, dealer-first blackjack basic strategy trainer covering dealer upcards 2 through Ace, plus Hi-Lo card counting drills.
 
 Visit the live site:
 
@@ -29,15 +29,18 @@ Ruleset used by the MVP:
 - Double after split allowed
 - No surrender
 
-All dealer upcard lessons are available from the start. Progress, quiz scores, and practice stats are stored in browser local storage.
+All dealer upcard lessons are available from the start. Progress, quiz scores, practice stats, and counting drill stats are stored in browser local storage.
 
 Lesson cards include an infinite-deck estimate of the dealer outcome distribution, dealer chance of going over 21, dealer average final total, an overall optimal-strategy summary for the selected dealer upcard, and a percentage-only Stand vs Hit once vs Optimal play outcome comparison.
+
+The Card Counting tab teaches the Hi-Lo values and includes card value, running count, and deck countdown drills.
 
 Shareable app URLs use hash routes:
 
 - `#/learn/2`
 - `#/learn/A`
 - `#/practice`
+- `#/counting`
 - `#/chart`
 
 ## License

@@ -42,6 +42,7 @@
     { rank: "9", value: 9, probability: 1 / 13 },
     { rank: "10", value: 10, probability: 4 / 13 }
   ];
+  const COUNT_CHOICES = [1, 0, -1];
   const DEALER_DISTRIBUTION_CACHE = {};
 
   const DEALER_NOTES = {
@@ -308,6 +309,7 @@
   };
 
   const SUITS = ["S", "H", "D", "C"];
+  const COUNT_RANKS = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
   const app = document.getElementById("app");
   const tabButtons = Array.from(document.querySelectorAll(".tab"));
 
@@ -318,6 +320,17 @@
     quizSubmitted: false,
     practiceScenario: null,
     practiceFeedback: null,
+    countingMode: "value",
+    countingValueCard: null,
+    countingValueFeedback: null,
+    countingSequence: null,
+    countingSequenceAnswer: "",
+    countingSequenceFeedback: null,
+    countingDeck: null,
+    countingDeckIndex: 0,
+    countingDeckUserCount: 0,
+    countingDeckExpectedCount: 0,
+    countingDeckLast: null,
     progress: loadProgress()
   };
 
@@ -346,6 +359,11 @@
       return true;
     }
 
+    if (first === "counting") {
+      state.activeTab = "counting";
+      return true;
+    }
+
     if (first === "chart") {
       state.activeTab = "chart";
       return true;
@@ -360,6 +378,9 @@
     }
     if (state.activeTab === "chart") {
       return "#/chart";
+    }
+    if (state.activeTab === "counting") {
+      return "#/counting";
     }
     return "#/practice";
   }
@@ -383,8 +404,10 @@
         return defaultProgress();
       }
       const parsed = JSON.parse(raw);
+      const base = defaultProgress();
       return Object.assign(defaultProgress(), parsed, {
-        stats: Object.assign(defaultProgress().stats, parsed.stats || {}),
+        stats: Object.assign(base.stats, parsed.stats || {}),
+        counting: Object.assign(base.counting, parsed.counting || {}),
         quizScores: Object.assign({}, parsed.quizScores || {})
       });
     } catch (error) {
@@ -400,6 +423,13 @@
       stats: {
         attempts: 0,
         correct: 0
+      },
+      counting: {
+        attempts: 0,
+        correct: 0,
+        streak: 0,
+        bestStreak: 0,
+        decksCompleted: 0
       }
     };
   }
@@ -667,6 +697,106 @@
     return (Math.round(value * 10) / 10).toFixed(1);
   }
 
+  function hiLoValue(rank) {
+    if (["2", "3", "4", "5", "6"].includes(rank)) {
+      return 1;
+    }
+    if (["7", "8", "9"].includes(rank)) {
+      return 0;
+    }
+    return -1;
+  }
+
+  function formatCount(value) {
+    if (value > 0) {
+      return "+" + value;
+    }
+    return String(value);
+  }
+
+  function randomSuit() {
+    return SUITS[Math.floor(Math.random() * SUITS.length)];
+  }
+
+  function randomCountCard() {
+    const rank = COUNT_RANKS[Math.floor(Math.random() * COUNT_RANKS.length)];
+    return { rank: rank, suit: randomSuit() };
+  }
+
+  function makeCountSequence(length) {
+    const sequence = [];
+    for (let index = 0; index < length; index += 1) {
+      sequence.push(randomCountCard());
+    }
+    return sequence;
+  }
+
+  function countSequenceTotal(sequence) {
+    return sequence.reduce(function (total, card) {
+      return total + hiLoValue(card.rank);
+    }, 0);
+  }
+
+  function makeCountDeck() {
+    const deck = [];
+    COUNT_RANKS.forEach(function (rank) {
+      SUITS.forEach(function (suit) {
+        deck.push({ rank: rank, suit: suit });
+      });
+    });
+    for (let index = deck.length - 1; index > 0; index -= 1) {
+      const swapIndex = Math.floor(Math.random() * (index + 1));
+      const card = deck[index];
+      deck[index] = deck[swapIndex];
+      deck[swapIndex] = card;
+    }
+    return deck;
+  }
+
+  function resetCountingValueCard() {
+    state.countingValueCard = randomCountCard();
+    state.countingValueFeedback = null;
+  }
+
+  function resetCountingSequence() {
+    state.countingSequence = makeCountSequence(8);
+    state.countingSequenceAnswer = "";
+    state.countingSequenceFeedback = null;
+  }
+
+  function resetCountingDeck() {
+    state.countingDeck = makeCountDeck();
+    state.countingDeckIndex = 0;
+    state.countingDeckUserCount = 0;
+    state.countingDeckExpectedCount = 0;
+    state.countingDeckLast = null;
+  }
+
+  function ensureCountingState() {
+    if (!state.countingValueCard) {
+      resetCountingValueCard();
+    }
+    if (!state.countingSequence) {
+      resetCountingSequence();
+    }
+    if (!state.countingDeck) {
+      resetCountingDeck();
+    }
+  }
+
+  function recordCountingResult(isCorrect) {
+    const counting = state.progress.counting;
+    counting.attempts += 1;
+    if (isCorrect) {
+      counting.correct += 1;
+      counting.streak += 1;
+      counting.bestStreak = Math.max(counting.bestStreak, counting.streak);
+    } else {
+      counting.streak = 0;
+    }
+    saveProgress();
+  }
+
   function render() {
     tabButtons.forEach(function (button) {
       button.classList.toggle("active", button.dataset.tab === state.activeTab);
@@ -678,6 +808,10 @@
     }
     if (state.activeTab === "practice") {
       renderPractice();
+      return;
+    }
+    if (state.activeTab === "counting") {
+      renderCounting();
       return;
     }
     renderChart();
@@ -1060,6 +1194,217 @@
     };
   }
 
+  function renderCounting() {
+    ensureCountingState();
+
+    const counting = state.progress.counting;
+    const accuracy = counting.attempts ? Math.round((counting.correct / counting.attempts) * 100) : 0;
+
+    app.innerHTML = [
+      '<section class="counting-panel">',
+      '<div class="panel-header counting-header">',
+      '<div>',
+      '<h2>Card Counting</h2>',
+      '<p class="muted">Hi-Lo drills for card values, running count, and full-deck countdown practice.</p>',
+      '</div>',
+      '<div class="counting-stats">',
+      '<div class="stat"><strong>' + counting.attempts + '</strong><span>Counting answers</span></div>',
+      '<div class="stat"><strong>' + accuracy + '%</strong><span>Accuracy</span></div>',
+      '<div class="stat"><strong>' + counting.bestStreak + '</strong><span>Best streak</span></div>',
+      '</div>',
+      '</div>',
+      renderCountingLesson(),
+      renderCountingModeTabs(),
+      renderCountingDrill(),
+      '</section>'
+    ].join("");
+  }
+
+  function renderCountingLesson() {
+    return [
+      '<section class="section counting-lesson">',
+      '<div class="section-heading">',
+      '<h3>Hi-Lo Count</h3>',
+      '<p class="section-subtitle">Every exposed card changes the running count by +1, 0, or -1.</p>',
+      '</div>',
+      '<div class="count-rule-grid">',
+      renderCountRule("+1", "2 3 4 5 6", "Low cards removed are good for the player because more high cards remain."),
+      renderCountRule("0", "7 8 9", "Middle cards are neutral in the Hi-Lo system."),
+      renderCountRule("-1", "10 J Q K A", "High cards removed are bad for the player because fewer strong cards remain."),
+      '</div>',
+      '<div class="counting-note">',
+      '<strong>Core idea:</strong> Keep a running count as cards leave the shoe. A positive count means the remaining cards are richer in tens and aces. True count comes later; this first drill is about never losing the running count.',
+      '</div>',
+      '</section>'
+    ].join("");
+  }
+
+  function renderCountRule(value, cards, copy) {
+    return [
+      '<article class="count-rule">',
+      '<strong>' + value + '</strong>',
+      '<span>' + cards + '</span>',
+      '<p>' + copy + '</p>',
+      '</article>'
+    ].join("");
+  }
+
+  function renderCountingModeTabs() {
+    const modes = [
+      { key: "value", label: "Card Value" },
+      { key: "running", label: "Running Count" },
+      { key: "deck", label: "Deck Countdown" }
+    ];
+    return [
+      '<div class="counting-mode-tabs" aria-label="Counting drill modes">',
+      modes.map(function (mode) {
+        const classes = ["mode-button"];
+        if (state.countingMode === mode.key) {
+          classes.push("active");
+        }
+        return '<button class="' + classes.join(" ") + '" type="button" data-counting-mode="' + mode.key + '">' + mode.label + '</button>';
+      }).join(""),
+      '</div>'
+    ].join("");
+  }
+
+  function renderCountingDrill() {
+    if (state.countingMode === "running") {
+      return renderRunningCountDrill();
+    }
+    if (state.countingMode === "deck") {
+      return renderDeckCountdownDrill();
+    }
+    return renderCardValueDrill();
+  }
+
+  function renderCardValueDrill() {
+    const card = state.countingValueCard;
+    const feedback = state.countingValueFeedback;
+    return [
+      '<section class="counting-drill">',
+      '<div class="drill-copy">',
+      '<h3>Card Value Drill</h3>',
+      '<p class="muted">Look at the card and choose its Hi-Lo value.</p>',
+      '</div>',
+      '<div class="count-card-stage">',
+      renderLargeCountingCard(card),
+      '</div>',
+      renderCountChoiceButtons("data-counting-value-answer", Boolean(feedback)),
+      feedback ? renderCountingFeedback(feedback.correct, feedback.message) : "",
+      '<div class="controls-row">',
+      '<button class="secondary-button" type="button" data-action="new-count-card">New card</button>',
+      '</div>',
+      '</section>'
+    ].join("");
+  }
+
+  function renderRunningCountDrill() {
+    const sequence = state.countingSequence;
+    const feedback = state.countingSequenceFeedback;
+    return [
+      '<section class="counting-drill">',
+      '<div class="drill-copy">',
+      '<h3>Running Count Drill</h3>',
+      '<p class="muted">Add the Hi-Lo values for the whole row, then enter the final running count.</p>',
+      '</div>',
+      '<div class="count-sequence">',
+      sequence.map(function (card) {
+        return renderPlayingCard(card.rank, card.suit);
+      }).join(""),
+      '</div>',
+      '<label class="count-input-row">',
+      '<span>Final running count</span>',
+      '<input class="count-input" type="number" inputmode="numeric" data-counting-sequence-answer value="' + state.countingSequenceAnswer + '">',
+      '</label>',
+      feedback ? renderCountingFeedback(feedback.correct, feedback.message) : "",
+      '<div class="controls-row">',
+      '<button class="primary-button" type="button" data-action="check-count-sequence">Check count</button>',
+      '<button class="secondary-button" type="button" data-action="new-count-sequence">New sequence</button>',
+      '</div>',
+      '</section>'
+    ].join("");
+  }
+
+  function renderDeckCountdownDrill() {
+    const deck = state.countingDeck;
+    const index = state.countingDeckIndex;
+    const done = index >= deck.length;
+    const card = done ? null : deck[index];
+    const finalCorrect = done && state.countingDeckUserCount === 0;
+    return [
+      '<section class="counting-drill">',
+      '<div class="drill-copy">',
+      '<h3>Deck Countdown Drill</h3>',
+      '<p class="muted">Count through one shuffled deck. If every card is counted correctly, the final running count is 0.</p>',
+      '</div>',
+      '<div class="deck-progress">',
+      '<div class="stat"><strong>' + Math.min(index + 1, deck.length) + '/' + deck.length + '</strong><span>Card position</span></div>',
+      '<div class="stat"><strong>' + formatCount(state.countingDeckUserCount) + '</strong><span>Your running count</span></div>',
+      '<div class="stat"><strong>' + state.progress.counting.decksCompleted + '</strong><span>Decks completed</span></div>',
+      '</div>',
+      done ? renderDeckComplete(finalCorrect) : renderDeckCardPrompt(card),
+      state.countingDeckLast ? renderDeckLastResult() : "",
+      '<div class="controls-row">',
+      '<button class="secondary-button" type="button" data-action="new-count-deck">Shuffle new deck</button>',
+      '</div>',
+      '</section>'
+    ].join("");
+  }
+
+  function renderDeckCardPrompt(card) {
+    return [
+      '<div class="count-card-stage">',
+      renderLargeCountingCard(card),
+      '</div>',
+      renderCountChoiceButtons("data-counting-deck-answer", false)
+    ].join("");
+  }
+
+  function renderDeckComplete(finalCorrect) {
+    return renderCountingFeedback(
+      finalCorrect,
+      finalCorrect ?
+        "Deck complete. Your final running count is 0." :
+        "Deck complete. Your final running count is " + formatCount(state.countingDeckUserCount) + ". A full deck should finish at 0."
+    );
+  }
+
+  function renderDeckLastResult() {
+    const last = state.countingDeckLast;
+    return renderCountingFeedback(
+      last.correct,
+      "Last card: " + last.rank + " is " + formatCount(last.expected) + ". Your running count is " + formatCount(state.countingDeckUserCount) + "."
+    );
+  }
+
+  function renderCountChoiceButtons(attributeName, disabled) {
+    return [
+      '<div class="count-choice-row">',
+      COUNT_CHOICES.map(function (value) {
+        return '<button class="count-choice" type="button" ' + attributeName + '="' + value + '" ' + (disabled ? "disabled" : "") + '>' + formatCount(value) + '</button>';
+      }).join(""),
+      '</div>'
+    ].join("");
+  }
+
+  function renderLargeCountingCard(card) {
+    return [
+      '<div class="large-count-card">',
+      renderPlayingCard(card.rank, card.suit),
+      '</div>'
+    ].join("");
+  }
+
+  function renderCountingFeedback(correct, message) {
+    return [
+      '<div class="feedback ' + (correct ? "good" : "bad") + '">',
+      '<strong>' + (correct ? "Correct" : "Check this") + '</strong>',
+      '<p>' + message + '</p>',
+      '</div>'
+    ].join("");
+  }
+
   function renderChart() {
     app.innerHTML = [
       '<section class="chart-panel">',
@@ -1140,6 +1485,9 @@
     if (tab === "practice") {
       state.practiceScenario = makePracticeScenario();
     }
+    if (tab === "counting") {
+      ensureCountingState();
+    }
     syncUrl(false);
     render();
   }
@@ -1184,6 +1532,14 @@
       return;
     }
 
+    if (target.dataset.countingMode) {
+      state.countingMode = target.dataset.countingMode;
+      ensureCountingState();
+      syncUrl(false);
+      render();
+      return;
+    }
+
     if (target.dataset.dealer) {
       const dealer = target.dataset.dealer;
       if (!isUnlocked(dealer)) {
@@ -1205,6 +1561,48 @@
       return;
     }
 
+    if (target.dataset.countingValueAnswer) {
+      if (state.countingValueFeedback) {
+        return;
+      }
+      const selected = parseInt(target.dataset.countingValueAnswer, 10);
+      const expected = hiLoValue(state.countingValueCard.rank);
+      const isCorrect = selected === expected;
+      state.countingValueFeedback = {
+        correct: isCorrect,
+        message: state.countingValueCard.rank + " is " + formatCount(expected) + "."
+      };
+      recordCountingResult(isCorrect);
+      render();
+      return;
+    }
+
+    if (target.dataset.countingDeckAnswer) {
+      const deck = state.countingDeck;
+      if (!deck || state.countingDeckIndex >= deck.length) {
+        return;
+      }
+      const card = deck[state.countingDeckIndex];
+      const selected = parseInt(target.dataset.countingDeckAnswer, 10);
+      const expected = hiLoValue(card.rank);
+      const isCorrect = selected === expected;
+      state.countingDeckUserCount += selected;
+      state.countingDeckExpectedCount += expected;
+      state.countingDeckLast = {
+        rank: card.rank,
+        expected: expected,
+        selected: selected,
+        correct: isCorrect
+      };
+      state.countingDeckIndex += 1;
+      if (state.countingDeckIndex >= deck.length) {
+        state.progress.counting.decksCompleted += 1;
+      }
+      recordCountingResult(isCorrect);
+      render();
+      return;
+    }
+
     if (target.dataset.practiceAnswer) {
       const scenario = state.practiceScenario;
       const correctAction = actionFor(scenario.row, scenario.dealer);
@@ -1219,6 +1617,47 @@
         explanation: explain(scenario.row, scenario.dealer)
       };
       saveProgress();
+      render();
+      return;
+    }
+
+    if (target.dataset.action === "new-count-card") {
+      resetCountingValueCard();
+      render();
+      return;
+    }
+
+    if (target.dataset.action === "check-count-sequence") {
+      if (state.countingSequenceFeedback) {
+        return;
+      }
+      const expected = countSequenceTotal(state.countingSequence);
+      const selected = parseInt(state.countingSequenceAnswer, 10);
+      const isNumber = !Number.isNaN(selected);
+      const isCorrect = isNumber && selected === expected;
+      state.countingSequenceFeedback = {
+        correct: isCorrect,
+        message: isNumber ?
+          "The final running count is " + formatCount(expected) + "." :
+          "Enter a final running count before checking."
+      };
+      if (!isNumber) {
+        render();
+        return;
+      }
+      recordCountingResult(isCorrect);
+      render();
+      return;
+    }
+
+    if (target.dataset.action === "new-count-sequence") {
+      resetCountingSequence();
+      render();
+      return;
+    }
+
+    if (target.dataset.action === "new-count-deck") {
+      resetCountingDeck();
       render();
       return;
     }
@@ -1267,6 +1706,15 @@
     if (target.dataset.action === "reset-progress") {
       resetProgress();
     }
+  });
+
+  document.addEventListener("input", function (event) {
+    const target = event.target;
+    if (!target || !target.dataset || target.dataset.countingSequenceAnswer === undefined) {
+      return;
+    }
+    state.countingSequenceAnswer = target.value;
+    state.countingSequenceFeedback = null;
   });
 
   window.addEventListener("hashchange", function () {
