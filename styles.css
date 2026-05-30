@@ -184,6 +184,7 @@ h1 {
 .practice-panel,
 .chart-panel,
 .counting-panel,
+.assessment-panel,
 .summary-strip {
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -788,7 +789,8 @@ h1 {
 
 .practice-panel,
 .chart-panel,
-.counting-panel {
+.counting-panel,
+.assessment-panel {
   padding: 22px;
 }
 
@@ -1208,6 +1210,151 @@ h1 {
   font-size: 1.18rem;
 }
 
+.assessment-overview,
+.assessment-result-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.assessment-overview-item,
+.assessment-result-item,
+.latest-assessment,
+.assessment-card,
+.result-hero,
+.assessment-recommendation,
+.assessment-misses {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-strong);
+}
+
+.assessment-overview-item,
+.assessment-result-item {
+  padding: 14px;
+}
+
+.assessment-overview-item strong,
+.assessment-result-item strong {
+  display: block;
+  color: var(--green-dark);
+  font-size: 1.8rem;
+  line-height: 1.05;
+}
+
+.assessment-overview-item span,
+.assessment-result-item span {
+  display: block;
+  margin-top: 6px;
+  font-weight: 850;
+}
+
+.assessment-overview-item p,
+.assessment-result-item p,
+.assessment-recommendation p,
+.assessment-misses li {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.latest-assessment {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 14px;
+}
+
+.latest-assessment strong,
+.latest-assessment span {
+  display: block;
+}
+
+.latest-assessment span {
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.assessment-progress {
+  overflow: hidden;
+  height: 10px;
+  border-radius: 999px;
+  background: #e8dece;
+  margin-bottom: 14px;
+}
+
+.assessment-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--green);
+}
+
+.assessment-card {
+  padding: 18px;
+}
+
+.compact-assessment-card {
+  max-width: 680px;
+  margin: 0 auto;
+}
+
+.count-chip {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  border: 1px solid rgba(15, 107, 79, 0.28);
+  border-radius: 999px;
+  background: #f6fbf8;
+  margin-top: 10px;
+  padding: 0 12px;
+  color: var(--green-dark);
+  font-weight: 850;
+}
+
+.selected-count {
+  border-color: var(--green);
+  background: var(--green);
+  color: #fff;
+}
+
+.assessment-run-progress {
+  margin-top: 14px;
+}
+
+.result-hero {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 14px;
+  padding: 18px;
+  background: #f6fbf8;
+}
+
+.result-hero span {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 850;
+}
+
+.result-hero strong {
+  color: var(--green-dark);
+  font-size: 2rem;
+  line-height: 1.05;
+}
+
+.assessment-recommendation,
+.assessment-misses {
+  margin-top: 14px;
+  padding: 14px;
+}
+
+.assessment-misses ul {
+  margin: 8px 0 0;
+  padding-left: 20px;
+}
+
 .chart-section {
   margin-top: 18px;
 }
@@ -1407,6 +1554,8 @@ th:first-child {
   .quiz-grid,
   .basics-grid,
   .count-rule-grid,
+  .assessment-overview,
+  .assessment-result-grid,
   .run-options,
   .speed-panel {
     grid-template-columns: 1fr;
@@ -1438,7 +1587,8 @@ th:first-child {
   .section,
   .practice-panel,
   .chart-panel,
-  .counting-panel {
+  .counting-panel,
+  .assessment-panel {
     padding: 16px;
   }
 
@@ -1461,6 +1611,10 @@ th:first-child {
 
   .practice-odds-heading {
     display: block;
+  }
+
+  .latest-assessment {
+    display: grid;
   }
 
   .action-button {

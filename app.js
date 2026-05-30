@@ -356,6 +356,28 @@
     action: "Take insurance",
     rule: "Take insurance at TC +3 or higher."
   };
+  const ASSESSMENT_SECTIONS = {
+    strategy: "Basic strategy",
+    value: "Card values",
+    running: "Running count",
+    deviation: "Count changes"
+  };
+  const ASSESSMENT_COUNTS = {
+    strategy: 20,
+    value: 10,
+    running: 2,
+    deviation: 5
+  };
+  const DEVIATION_EXAM_BANK = [
+    { type: "hard", rowId: "hard-13-16", dealer: "10", cards: ["10", "6"], trueCount: 1 },
+    { type: "hard", rowId: "hard-12", dealer: "4", cards: ["10", "2"], trueCount: -1 },
+    { type: "hard", rowId: "hard-11", dealer: "A", cards: ["6", "5"], trueCount: 2 },
+    { type: "hard", rowId: "hard-10", dealer: "10", cards: ["6", "4"], trueCount: 5 },
+    { type: "hard", rowId: "hard-13-16", dealer: "2", cards: ["10", "3"], trueCount: -2 },
+    { type: "hard", rowId: "hard-9", dealer: "2", cards: ["4", "5"], trueCount: 2 },
+    { type: "hard", rowId: "hard-12", dealer: "3", cards: ["10", "2"], trueCount: 3 },
+    { type: "pair", rowId: "pair-10", dealer: "6", cards: ["10", "10"], trueCount: 5 }
+  ];
 
   const SUITS = ["S", "H", "D", "C"];
   const COUNT_RANKS = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
@@ -387,6 +409,7 @@
     countingRunLastAdvancedAt: 0,
     countingRunFinishedAt: 0,
     countingRunTransition: 0,
+    assessmentSession: null,
     progress: loadProgress()
   };
 
@@ -420,6 +443,11 @@
       return true;
     }
 
+    if (first === "assessment") {
+      state.activeTab = "assessment";
+      return true;
+    }
+
     if (first === "chart") {
       state.activeTab = "chart";
       return true;
@@ -437,6 +465,9 @@
     }
     if (state.activeTab === "counting") {
       return "#/counting";
+    }
+    if (state.activeTab === "assessment") {
+      return "#/assessment";
     }
     return "#/practice";
   }
@@ -464,6 +495,7 @@
       return Object.assign(defaultProgress(), parsed, {
         stats: Object.assign(base.stats, parsed.stats || {}),
         counting: Object.assign(base.counting, parsed.counting || {}),
+        assessment: Object.assign(base.assessment, parsed.assessment || {}),
         quizScores: Object.assign({}, parsed.quizScores || {})
       });
     } catch (error) {
@@ -486,6 +518,9 @@
         streak: 0,
         bestStreak: 0,
         decksCompleted: 0
+      },
+      assessment: {
+        latest: null
       }
     };
   }
@@ -1103,6 +1138,10 @@
     return sequence;
   }
 
+  function shuffled(items) {
+    return shuffleCards(items);
+  }
+
   function countSequenceTotal(sequence) {
     return sequence.reduce(function (total, card) {
       return total + hiLoValue(card.rank);
@@ -1209,6 +1248,11 @@
     if (state.activeTab === "counting") {
       renderCounting();
       syncCountingTimer();
+      return;
+    }
+    if (state.activeTab === "assessment") {
+      stopCountingTimer();
+      renderAssessment();
       return;
     }
     stopCountingTimer();
@@ -1669,6 +1713,272 @@
     };
   }
 
+  function makeAssessmentSession() {
+    const questions = []
+      .concat(makeStrategyAssessmentQuestions(ASSESSMENT_COUNTS.strategy))
+      .concat(makeCardValueAssessmentQuestions(ASSESSMENT_COUNTS.value))
+      .concat(makeRunningCountAssessmentQuestions(ASSESSMENT_COUNTS.running))
+      .concat(makeDeviationAssessmentQuestions(ASSESSMENT_COUNTS.deviation));
+    return {
+      questions: questions,
+      answers: [],
+      index: 0,
+      startedAt: Date.now(),
+      questionStartedAt: Date.now(),
+      status: "active",
+      result: null
+    };
+  }
+
+  function makeStrategyAssessmentQuestions(count) {
+    const typeCycle = ["hard", "soft", "pair"];
+    const questions = [];
+    const used = {};
+    let attempts = 0;
+
+    while (questions.length < count && attempts < count * 10) {
+      const type = typeCycle[questions.length % typeCycle.length];
+      const rows = ROW_GROUPS[type];
+      const row = rows[Math.floor(Math.random() * rows.length)];
+      const dealer = DEALERS[Math.floor(Math.random() * DEALERS.length)];
+      const cards = randomPracticeCards(row);
+      const key = type + ":" + row.id + ":" + dealer + ":" + cards.join("-");
+      attempts += 1;
+      if (used[key]) {
+        continue;
+      }
+      used[key] = true;
+      questions.push(makeHandQuestion("strategy", type, row, dealer, cards, null));
+    }
+
+    while (questions.length < count) {
+      const scenario = makePracticeScenario();
+      questions.push(makeHandQuestion("strategy", scenario.type, scenario.row, scenario.dealer, scenario.cards, null));
+    }
+
+    return questions;
+  }
+
+  function makeCardValueAssessmentQuestions(count) {
+    const questions = [];
+    for (let index = 0; index < count; index += 1) {
+      const card = randomCountCard();
+      questions.push({
+        kind: "value",
+        section: ASSESSMENT_SECTIONS.value,
+        prompt: "Choose this card's Hi-Lo value.",
+        card: card,
+        correct: String(hiLoValue(card.rank))
+      });
+    }
+    return questions;
+  }
+
+  function makeRunningCountAssessmentQuestions(count) {
+    const questions = [];
+    for (let index = 0; index < count; index += 1) {
+      const cards = makeRandomCountSequence(12);
+      questions.push({
+        kind: "running",
+        section: ASSESSMENT_SECTIONS.running,
+        prompt: "Keep the running count through this 12-card stream.",
+        cards: cards,
+        cardIndex: 0,
+        correct: String(countSequenceTotal(cards))
+      });
+    }
+    return questions;
+  }
+
+  function makeDeviationAssessmentQuestions(count) {
+    return shuffled(DEVIATION_EXAM_BANK).slice(0, count).map(function (item) {
+      const row = findRow(item.type, item.rowId);
+      return makeHandQuestion("deviation", item.type, row, item.dealer, item.cards, item.trueCount);
+    });
+  }
+
+  function makeHandQuestion(kind, type, row, dealer, cards, trueCount) {
+    const scenario = {
+      dealer: dealer,
+      type: type,
+      kindLabel: type === "pair" ? "Pair decision" : type.charAt(0).toUpperCase() + type.slice(1) + " total",
+      cards: cards.slice(),
+      handLabel: exactHandLabel(cards, type),
+      row: row
+    };
+    const correct = kind === "deviation" ? countAwareAction(scenario, trueCount) : actionFor(row, dealer);
+    return {
+      kind: kind,
+      section: kind === "deviation" ? ASSESSMENT_SECTIONS.deviation : ASSESSMENT_SECTIONS.strategy,
+      prompt: kind === "deviation" ? "Choose the count-adjusted play." : "Choose the basic strategy play.",
+      scenario: scenario,
+      trueCount: trueCount,
+      correct: correct
+    };
+  }
+
+  function currentAssessmentQuestion() {
+    const session = state.assessmentSession;
+    if (!session || session.status !== "active") {
+      return null;
+    }
+    return session.questions[session.index] || null;
+  }
+
+  function currentAssessmentAnswer() {
+    const session = state.assessmentSession;
+    if (!session) {
+      return null;
+    }
+    return session.answers[session.index] || null;
+  }
+
+  function recordAssessmentAnswer(value) {
+    const session = state.assessmentSession;
+    const question = currentAssessmentQuestion();
+    if (!session || !question) {
+      return;
+    }
+    const answer = {
+      selected: String(value),
+      correct: String(value) === String(question.correct)
+    };
+    if (question.kind === "value") {
+      answer.elapsedMs = Math.max(0, Date.now() - session.questionStartedAt);
+    }
+    session.answers[session.index] = answer;
+  }
+
+  function canAdvanceAssessment() {
+    const question = currentAssessmentQuestion();
+    const answer = currentAssessmentAnswer();
+    if (!question) {
+      return false;
+    }
+    if (question.kind === "running") {
+      return question.cardIndex >= question.cards.length && Boolean(answer);
+    }
+    return Boolean(answer);
+  }
+
+  function advanceAssessment() {
+    const session = state.assessmentSession;
+    if (!session || !canAdvanceAssessment()) {
+      return;
+    }
+    if (session.index >= session.questions.length - 1) {
+      finishAssessment();
+      return;
+    }
+    session.index += 1;
+    session.questionStartedAt = Date.now();
+  }
+
+  function finishAssessment() {
+    const session = state.assessmentSession;
+    const result = scoreAssessment(session);
+    session.status = "complete";
+    session.result = result;
+    state.progress.assessment.latest = result;
+    saveProgress();
+  }
+
+  function scoreAssessment(session) {
+    const sections = {};
+    Object.keys(ASSESSMENT_SECTIONS).forEach(function (key) {
+      sections[key] = {
+        label: ASSESSMENT_SECTIONS[key],
+        correct: 0,
+        total: 0,
+        percent: 0
+      };
+    });
+
+    const missed = [];
+    let totalCorrect = 0;
+    let totalQuestions = 0;
+    const valueTimes = [];
+
+    session.questions.forEach(function (question, index) {
+      const answer = session.answers[index];
+      const section = sections[question.kind];
+      section.total += 1;
+      totalQuestions += 1;
+      if (answer && answer.correct) {
+        section.correct += 1;
+        totalCorrect += 1;
+      } else {
+        missed.push(assessmentMissLabel(question));
+      }
+      if (question.kind === "value" && answer && answer.elapsedMs !== undefined) {
+        valueTimes.push(answer.elapsedMs);
+      }
+    });
+
+    Object.keys(sections).forEach(function (key) {
+      const section = sections[key];
+      section.percent = section.total ? Math.round((section.correct / section.total) * 100) : 0;
+    });
+
+    const totalPercent = totalQuestions ? Math.round((totalCorrect / totalQuestions) * 100) : 0;
+    return {
+      completedAt: new Date().toISOString(),
+      totalCorrect: totalCorrect,
+      totalQuestions: totalQuestions,
+      totalPercent: totalPercent,
+      level: assessmentLevel(totalPercent, sections),
+      sections: sections,
+      averageValueMs: Math.round(average(valueTimes)),
+      recommendation: assessmentRecommendation(sections),
+      missed: missed.slice(0, 8)
+    };
+  }
+
+  function assessmentLevel(totalPercent, sections) {
+    if (totalPercent < 60) {
+      return "Beginner";
+    }
+    if (totalPercent < 75) {
+      return "Developing";
+    }
+    if (sections.strategy.percent >= 90 && sections.value.percent >= 90 && sections.running.percent >= 90 && sections.deviation.percent >= 80) {
+      return "Advanced";
+    }
+    if (sections.strategy.percent >= 90 && sections.value.percent >= 80 && sections.running.percent >= 50) {
+      return "Counting Ready";
+    }
+    return "Solid Basic Strategy";
+  }
+
+  function assessmentRecommendation(sections) {
+    const ordered = Object.keys(sections).sort(function (a, b) {
+      return sections[a].percent - sections[b].percent;
+    });
+    const weakest = ordered[0];
+    if (weakest === "strategy") {
+      return "Practice basic strategy hands before adding more count deviations.";
+    }
+    if (weakest === "value") {
+      return "Use the Card Value Drill until +1, 0, and -1 are automatic.";
+    }
+    if (weakest === "running") {
+      return "Use the Running Count Drill with 12-card runs, then move to full decks.";
+    }
+    return "Review the Count Changes section in the Strategy Chart.";
+  }
+
+  function assessmentMissLabel(question) {
+    if (question.kind === "value") {
+      return question.card.rank + " is " + formatCount(parseInt(question.correct, 10));
+    }
+    if (question.kind === "running") {
+      return "Running count: " + formatCount(parseInt(question.correct, 10));
+    }
+    const scenario = question.scenario;
+    const countLabel = question.kind === "deviation" ? " at TC " + formatCount(question.trueCount) : "";
+    return scenario.handLabel + " vs dealer " + scenario.dealer + countLabel + ": " + ACTIONS[question.correct].label;
+  }
+
   function renderCounting() {
     ensureCountingState();
 
@@ -1915,6 +2225,252 @@
     ].join("");
   }
 
+  function renderAssessment() {
+    const session = state.assessmentSession;
+    if (session && session.status === "active") {
+      renderAssessmentQuestion(session);
+      return;
+    }
+    if (session && session.status === "complete") {
+      renderAssessmentResults(session.result);
+      return;
+    }
+    renderAssessmentIntro();
+  }
+
+  function renderAssessmentIntro() {
+    const latest = state.progress.assessment.latest;
+    app.innerHTML = [
+      '<section class="assessment-panel">',
+      '<div class="panel-header">',
+      '<div><h2>Assessment</h2><p class="muted">A general exam for basic strategy, counting speed, running count, and count changes.</p></div>',
+      '<button class="primary-button" type="button" data-action="start-assessment">Start assessment</button>',
+      '</div>',
+      '<div class="assessment-overview">',
+      renderAssessmentOverviewItem("Basic strategy", ASSESSMENT_COUNTS.strategy, "Random hard totals, soft totals, pairs, and dealer upcards."),
+      renderAssessmentOverviewItem("Card values", ASSESSMENT_COUNTS.value, "Quick Hi-Lo +1, 0, and -1 recognition."),
+      renderAssessmentOverviewItem("Running count", ASSESSMENT_COUNTS.running, "Two 12-card streams with final count answers."),
+      renderAssessmentOverviewItem("Count changes", ASSESSMENT_COUNTS.deviation, "Common Hi-Lo index decisions after basic strategy."),
+      '</div>',
+      latest ? renderLatestAssessment(latest) : "",
+      '</section>'
+    ].join("");
+  }
+
+  function renderAssessmentOverviewItem(label, count, copy) {
+    return [
+      '<article class="assessment-overview-item">',
+      '<strong>' + count + '</strong>',
+      '<span>' + label + '</span>',
+      '<p>' + copy + '</p>',
+      '</article>'
+    ].join("");
+  }
+
+  function renderLatestAssessment(result) {
+    return [
+      '<div class="latest-assessment">',
+      '<div>',
+      '<strong>Latest result: ' + result.level + '</strong>',
+      '<span>' + result.totalPercent + '% on ' + new Date(result.completedAt).toLocaleDateString() + '</span>',
+      '</div>',
+      '<button class="secondary-button" type="button" data-action="show-latest-assessment">View result</button>',
+      '</div>'
+    ].join("");
+  }
+
+  function renderAssessmentQuestion(session) {
+    const question = session.questions[session.index];
+    const progressText = "Question " + (session.index + 1) + " / " + session.questions.length;
+    app.innerHTML = [
+      '<section class="assessment-panel">',
+      '<div class="panel-header">',
+      '<div>',
+      '<h2>Assessment</h2>',
+      '<p class="muted">' + progressText + ' | ' + question.section + '</p>',
+      '</div>',
+      '<button class="secondary-button" type="button" data-action="cancel-assessment">Exit assessment</button>',
+      '</div>',
+      '<div class="assessment-progress"><span style="width: ' + Math.round((session.index / session.questions.length) * 100) + '%"></span></div>',
+      renderAssessmentQuestionBody(question),
+      '</section>'
+    ].join("");
+  }
+
+  function renderAssessmentQuestionBody(question) {
+    if (question.kind === "value") {
+      return renderAssessmentValueQuestion(question);
+    }
+    if (question.kind === "running") {
+      return renderAssessmentRunningQuestion(question);
+    }
+    return renderAssessmentHandQuestion(question);
+  }
+
+  function renderAssessmentHandQuestion(question) {
+    const scenario = question.scenario;
+    return [
+      '<div class="assessment-card">',
+      '<p class="muted">' + question.prompt + '</p>',
+      '<h2>' + scenario.handLabel + ' vs dealer ' + scenario.dealer + '</h2>',
+      question.kind === "deviation" ? '<div class="count-chip">True count ' + formatCount(question.trueCount) + '</div>' : "",
+      renderPracticeTable(scenario),
+      renderAssessmentActionChoices(question),
+      renderAssessmentNextRow(),
+      '</div>'
+    ].join("");
+  }
+
+  function renderAssessmentActionChoices(question) {
+    const answer = currentAssessmentAnswer();
+    const scenario = question.scenario;
+    return [
+      '<div class="action-row">',
+      practiceActionsForScenario(scenario).map(function (action) {
+        const classes = ["action-button"];
+        if (answer && answer.selected === action) {
+          classes.push("selected");
+        }
+        return '<button class="' + classes.join(" ") + '" type="button" data-assessment-answer="' + action + '">' + ACTIONS[action].label + '</button>';
+      }).join(""),
+      '</div>'
+    ].join("");
+  }
+
+  function renderAssessmentValueQuestion(question) {
+    const answer = currentAssessmentAnswer();
+    return [
+      '<div class="assessment-card compact-assessment-card">',
+      '<p class="muted">' + question.prompt + '</p>',
+      '<div class="count-card-stage">',
+      renderLargeCountingCard(question.card),
+      '</div>',
+      '<div class="count-choice-row">',
+      COUNT_CHOICES.map(function (value) {
+        const classes = ["count-choice"];
+        if (answer && answer.selected === String(value)) {
+          classes.push("selected-count");
+        }
+        return '<button class="' + classes.join(" ") + '" type="button" data-assessment-answer="' + value + '">' + formatCount(value) + '</button>';
+      }).join(""),
+      '</div>',
+      renderAssessmentNextRow(),
+      '</div>'
+    ].join("");
+  }
+
+  function renderAssessmentRunningQuestion(question) {
+    const answer = currentAssessmentAnswer();
+    const done = question.cardIndex >= question.cards.length;
+    const card = done ? null : question.cards[question.cardIndex];
+    return [
+      '<div class="assessment-card compact-assessment-card">',
+      '<p class="muted">' + question.prompt + '</p>',
+      '<h2>Running Count</h2>',
+      done ? renderAssessmentRunningAnswer(question, answer) : [
+        '<div class="deck-progress assessment-run-progress">',
+        '<div class="stat"><strong>' + (question.cardIndex + 1) + '/' + question.cards.length + '</strong><span>Card position</span></div>',
+        '<div class="stat"><strong>No hints</strong><span>Keep count mentally</span></div>',
+        '</div>',
+        '<div class="count-card-stage">',
+        renderLargeCountingCard(card),
+        '</div>',
+        '<div class="controls-row">',
+        '<button class="primary-button" type="button" data-action="assessment-next-run-card">Next card</button>',
+        '</div>'
+      ].join(""),
+      done ? renderAssessmentNextRow() : "",
+      '</div>'
+    ].join("");
+  }
+
+  function renderAssessmentRunningAnswer(question, answer) {
+    return [
+      '<div class="final-count-picker">',
+      '<strong>Final running count</strong>',
+      '<div class="count-answer-grid">',
+      countAnswerOptions().map(function (value) {
+        const classes = ["count-answer-button"];
+        if (answer && answer.selected === String(value)) {
+          classes.push("selected");
+        }
+        return '<button class="' + classes.join(" ") + '" type="button" data-assessment-running-answer="' + value + '">' + formatCount(value) + '</button>';
+      }).join(""),
+      '</div>',
+      '</div>'
+    ].join("");
+  }
+
+  function renderAssessmentNextRow() {
+    const session = state.assessmentSession;
+    const isLast = session && session.index >= session.questions.length - 1;
+    return [
+      '<div class="controls-row">',
+      '<button class="primary-button" type="button" data-action="assessment-next" ' + (canAdvanceAssessment() ? "" : "disabled") + '>' + (isLast ? "Finish assessment" : "Next question") + '</button>',
+      '</div>'
+    ].join("");
+  }
+
+  function renderAssessmentResults(result) {
+    app.innerHTML = [
+      '<section class="assessment-panel">',
+      '<div class="panel-header">',
+      '<div><h2>Assessment Result</h2><p class="muted">' + result.totalCorrect + ' of ' + result.totalQuestions + ' correct</p></div>',
+      '<button class="primary-button" type="button" data-action="start-assessment">Retake assessment</button>',
+      '</div>',
+      '<div class="result-hero">',
+      '<span>Skill level</span>',
+      '<strong>' + result.level + '</strong>',
+      '<p>' + result.totalPercent + '% overall</p>',
+      '</div>',
+      renderAssessmentResultGrid(result),
+      '<div class="assessment-recommendation">',
+      '<strong>Recommended next step</strong>',
+      '<p>' + result.recommendation + '</p>',
+      '</div>',
+      result.missed.length ? renderAssessmentMisses(result.missed) : "",
+      '<div class="controls-row">',
+      '<button class="secondary-button" type="button" data-action="close-assessment-result">Back to assessment</button>',
+      '</div>',
+      '</section>'
+    ].join("");
+  }
+
+  function renderAssessmentResultGrid(result) {
+    return [
+      '<div class="assessment-result-grid">',
+      Object.keys(result.sections).map(function (key) {
+        const section = result.sections[key];
+        return [
+          '<article class="assessment-result-item">',
+          '<strong>' + section.percent + '%</strong>',
+          '<span>' + section.label + '</span>',
+          '<p>' + section.correct + ' / ' + section.total + ' correct</p>',
+          '</article>'
+        ].join("");
+      }).join(""),
+      '<article class="assessment-result-item">',
+      '<strong>' + (result.averageValueMs ? formatSeconds(result.averageValueMs) : "-") + '</strong>',
+      '<span>Card speed</span>',
+      '<p>Average Hi-Lo value response</p>',
+      '</article>',
+      '</div>'
+    ].join("");
+  }
+
+  function renderAssessmentMisses(missed) {
+    return [
+      '<div class="assessment-misses">',
+      '<strong>Review these</strong>',
+      '<ul>',
+      missed.map(function (item) {
+        return '<li>' + item + '</li>';
+      }).join(""),
+      '</ul>',
+      '</div>'
+    ].join("");
+  }
+
   function renderChart() {
     app.innerHTML = [
       '<section class="chart-panel">',
@@ -2069,6 +2625,7 @@
     state.quizSubmitted = false;
     state.practiceScenario = null;
     state.practiceFeedback = null;
+    state.assessmentSession = null;
     saveProgress();
     syncUrl(false);
     render();
@@ -2087,6 +2644,18 @@
 
     if (target.dataset.tabJump) {
       setActiveTab(target.dataset.tabJump);
+      return;
+    }
+
+    if (target.dataset.assessmentAnswer !== undefined) {
+      recordAssessmentAnswer(target.dataset.assessmentAnswer);
+      render();
+      return;
+    }
+
+    if (target.dataset.assessmentRunningAnswer !== undefined) {
+      recordAssessmentAnswer(target.dataset.assessmentRunningAnswer);
+      render();
       return;
     }
 
@@ -2176,6 +2745,52 @@
         explanation: explain(scenario.row, scenario.dealer)
       };
       saveProgress();
+      render();
+      return;
+    }
+
+    if (target.dataset.action === "start-assessment") {
+      state.assessmentSession = makeAssessmentSession();
+      syncUrl(false);
+      render();
+      return;
+    }
+
+    if (target.dataset.action === "show-latest-assessment") {
+      state.assessmentSession = {
+        status: "complete",
+        result: state.progress.assessment.latest,
+        questions: [],
+        answers: [],
+        index: 0
+      };
+      render();
+      return;
+    }
+
+    if (target.dataset.action === "cancel-assessment") {
+      state.assessmentSession = null;
+      render();
+      return;
+    }
+
+    if (target.dataset.action === "close-assessment-result") {
+      state.assessmentSession = null;
+      render();
+      return;
+    }
+
+    if (target.dataset.action === "assessment-next-run-card") {
+      const question = currentAssessmentQuestion();
+      if (question && question.kind === "running" && question.cardIndex < question.cards.length) {
+        question.cardIndex += 1;
+        render();
+      }
+      return;
+    }
+
+    if (target.dataset.action === "assessment-next") {
+      advanceAssessment();
       render();
       return;
     }

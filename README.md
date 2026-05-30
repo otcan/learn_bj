@@ -37,12 +37,15 @@ Practice hands use a table-style layout and show neutral count-0 winning chances
 
 The Card Counting tab teaches the Hi-Lo values and includes a card value drill with response-speed feedback plus sequential running count drills for short runs, one-color half-decks, full decks, and multiple decks. Running count drills show pace feedback and use selectable boxes for the final count.
 
+The Assessment tab gives a general exam across basic strategy, card-value recognition, running count, and count-changing strategy plays, then stores the latest skill-level result locally.
+
 Shareable app URLs use hash routes:
 
 - `#/learn/2`
 - `#/learn/A`
 - `#/practice`
 - `#/counting`
+- `#/assessment`
 - `#/chart`
 
 ## License
