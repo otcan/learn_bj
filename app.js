@@ -334,6 +334,7 @@
   const COUNT_RANKS = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
   const app = document.getElementById("app");
   const tabButtons = Array.from(document.querySelectorAll(".tab"));
+  let countingTimerId = null;
 
   const state = {
     activeTab: "learn",
@@ -345,12 +346,20 @@
     countingMode: "value",
     countingValueCard: null,
     countingValueFeedback: null,
+    countingValueStartedAt: 0,
+    countingValueLastMs: null,
+    countingValueLastWasCorrect: null,
+    countingValueSpeeds: [],
     countingRunType: "short",
     countingRunCards: null,
     countingRunIndex: 0,
     countingRunAnswer: "",
     countingRunFeedback: null,
     countingRunShowCount: false,
+    countingRunStartedAt: 0,
+    countingRunLastAdvancedAt: 0,
+    countingRunFinishedAt: 0,
+    countingRunTransition: 0,
     progress: loadProgress()
   };
 
@@ -734,6 +743,144 @@
     return String(value);
   }
 
+  function formatSeconds(ms) {
+    return (Math.round(ms / 100) / 10).toFixed(1) + "s";
+  }
+
+  function average(values) {
+    if (!values.length) {
+      return 0;
+    }
+    return values.reduce(function (total, value) {
+      return total + value;
+    }, 0) / values.length;
+  }
+
+  function valueSpeedRating(ms) {
+    if (!ms) {
+      return {
+        label: "Start steady",
+        copy: "Aim for correct answers before speed."
+      };
+    }
+    if (ms <= 800) {
+      return {
+        label: "Fast",
+        copy: "This is casino-ready recognition speed."
+      };
+    }
+    if (ms <= 1400) {
+      return {
+        label: "Good",
+        copy: "You are recognizing values quickly."
+      };
+    }
+    if (ms <= 2400) {
+      return {
+        label: "Getting there",
+        copy: "Keep going until the value feels automatic."
+      };
+    }
+    return {
+      label: "Slow",
+      copy: "Pause and drill accuracy, then speed up."
+    };
+  }
+
+  function runPaceRating(msPerCard) {
+    if (!msPerCard) {
+      return {
+        label: "Ready",
+        copy: "Start the run and keep the count in your head."
+      };
+    }
+    if (msPerCard <= 900) {
+      return {
+        label: "Fast pace",
+        copy: "Good if the count is still accurate."
+      };
+    }
+    if (msPerCard <= 1700) {
+      return {
+        label: "Good pace",
+        copy: "This is a useful practice rhythm."
+      };
+    }
+    if (msPerCard <= 2800) {
+      return {
+        label: "Steady pace",
+        copy: "Try to reduce hesitation between cards."
+      };
+    }
+    return {
+      label: "Slow pace",
+      copy: "Accuracy first, then shorten the gap."
+    };
+  }
+
+  function currentRunElapsed() {
+    if (!state.countingRunStartedAt) {
+      return 0;
+    }
+    const endTime = state.countingRunFinishedAt || Date.now();
+    return Math.max(0, endTime - state.countingRunStartedAt);
+  }
+
+  function currentRunCardsSeenCount() {
+    if (!state.countingRunCards) {
+      return 0;
+    }
+    return Math.min(state.countingRunIndex + 1, state.countingRunCards.length);
+  }
+
+  function currentRunPace() {
+    const cardsSeen = currentRunCardsSeenCount();
+    return runPaceRating(cardsSeen ? currentRunElapsed() / cardsSeen : 0);
+  }
+
+  function updateCountingTimerDisplay() {
+    const elapsedNode = document.querySelector("[data-run-elapsed]");
+    if (!elapsedNode) {
+      return;
+    }
+
+    const cardsSeenNode = document.querySelector("[data-run-cards-seen]");
+    const paceLabelNode = document.querySelector("[data-run-pace-label]");
+    const paceCopyNode = document.querySelector("[data-run-pace-copy]");
+    const pace = currentRunPace();
+
+    elapsedNode.textContent = formatSeconds(currentRunElapsed());
+    if (cardsSeenNode) {
+      cardsSeenNode.textContent = String(currentRunCardsSeenCount());
+    }
+    if (paceLabelNode) {
+      paceLabelNode.textContent = pace.label;
+    }
+    if (paceCopyNode) {
+      paceCopyNode.textContent = pace.copy;
+    }
+  }
+
+  function syncCountingTimer() {
+    if (state.activeTab !== "counting" || state.countingMode !== "running") {
+      stopCountingTimer();
+      return;
+    }
+    updateCountingTimerDisplay();
+    if (countingTimerId) {
+      return;
+    }
+    countingTimerId = window.setInterval(updateCountingTimerDisplay, 250);
+  }
+
+  function stopCountingTimer() {
+    if (!countingTimerId) {
+      return;
+    }
+    window.clearInterval(countingTimerId);
+    countingTimerId = null;
+  }
+
   function randomSuit() {
     return SUITS[Math.floor(Math.random() * SUITS.length)];
   }
@@ -807,6 +954,7 @@
   function resetCountingValueCard() {
     state.countingValueCard = randomCountCard();
     state.countingValueFeedback = null;
+    state.countingValueStartedAt = Date.now();
   }
 
   function resetCountingRun() {
@@ -815,6 +963,10 @@
     state.countingRunAnswer = "";
     state.countingRunFeedback = null;
     state.countingRunShowCount = false;
+    state.countingRunStartedAt = Date.now();
+    state.countingRunLastAdvancedAt = state.countingRunStartedAt;
+    state.countingRunFinishedAt = 0;
+    state.countingRunTransition += 1;
   }
 
   function ensureCountingState() {
@@ -851,17 +1003,21 @@
     });
 
     if (state.activeTab === "learn") {
+      stopCountingTimer();
       renderLearn();
       return;
     }
     if (state.activeTab === "practice") {
+      stopCountingTimer();
       renderPractice();
       return;
     }
     if (state.activeTab === "counting") {
       renderCounting();
+      syncCountingTimer();
       return;
     }
+    stopCountingTimer();
     renderChart();
   }
 
@@ -1339,7 +1495,24 @@
       '<div class="controls-row">',
       '<button class="secondary-button" type="button" data-action="new-count-card">New card</button>',
       '</div>',
+      renderValueSpeedPanel(),
       '</section>'
+    ].join("");
+  }
+
+  function renderValueSpeedPanel() {
+    const last = state.countingValueLastMs;
+    const averageMs = average(state.countingValueSpeeds);
+    const rating = state.countingValueLastWasCorrect === false ? {
+      label: "Accuracy first",
+      copy: "That answer was wrong. Slow down until the values feel automatic."
+    } : valueSpeedRating(averageMs || last);
+    return [
+      '<div class="speed-panel">',
+      '<div class="speed-metric"><span>Last tap</span><strong>' + (last ? formatSeconds(last) : "-") + '</strong></div>',
+      '<div class="speed-metric"><span>Correct avg</span><strong>' + (averageMs ? formatSeconds(averageMs) : "-") + '</strong></div>',
+      '<div class="speed-message"><strong>' + rating.label + '</strong><span>' + rating.copy + '</span></div>',
+      '</div>'
     ].join("");
   }
 
@@ -1351,6 +1524,9 @@
     const feedback = state.countingRunFeedback;
     const runType = COUNT_RUN_TYPES[state.countingRunType];
     const currentCount = currentRunCount();
+    const elapsed = currentRunElapsed();
+    const cardsSeen = currentRunCardsSeenCount();
+    const pace = currentRunPace();
     return [
       '<section class="counting-drill">',
       '<div class="drill-copy">',
@@ -1371,7 +1547,18 @@
       '<button class="secondary-button" type="button" data-action="toggle-count-reveal">' + (state.countingRunShowCount ? "Hide count" : "Show count") + '</button>',
       '<button class="secondary-button" type="button" data-action="new-count-run">New run</button>',
       '</div>',
+      renderRunTimerPanel(elapsed, cardsSeen, pace),
       '</section>'
+    ].join("");
+  }
+
+  function renderRunTimerPanel(elapsed, cardsSeen, pace) {
+    return [
+      '<div class="speed-panel run-timer-panel">',
+      '<div class="speed-metric"><span>Elapsed</span><strong data-run-elapsed>' + formatSeconds(elapsed) + '</strong></div>',
+      '<div class="speed-metric"><span>Cards seen</span><strong data-run-cards-seen>' + cardsSeen + '</strong></div>',
+      '<div class="speed-message"><strong data-run-pace-label>' + pace.label + '</strong><span data-run-pace-copy>' + pace.copy + '</span></div>',
+      '</div>'
     ].join("");
   }
 
@@ -1397,7 +1584,7 @@
 
   function renderRunningCountCard(card) {
     return [
-      '<div class="count-card-stage">',
+      '<div class="count-card-stage" data-card-transition="' + state.countingRunTransition + '">',
       renderLargeCountingCard(card),
       '</div>',
       '<p class="math-note">Include this card in your mental count before pressing Next card.</p>'
@@ -1405,12 +1592,29 @@
   }
 
   function renderRunningCountAnswer() {
+    const selected = state.countingRunAnswer;
     return [
-      '<label class="count-input-row">',
-      '<span>Final running count</span>',
-      '<input class="count-input" type="number" inputmode="numeric" data-counting-run-answer value="' + state.countingRunAnswer + '">',
-      '</label>'
+      '<div class="final-count-picker">',
+      '<strong>Final running count</strong>',
+      '<div class="count-answer-grid">',
+      countAnswerOptions().map(function (value) {
+        const classes = ["count-answer-button"];
+        if (String(value) === String(selected)) {
+          classes.push("selected");
+        }
+        return '<button class="' + classes.join(" ") + '" type="button" data-counting-run-answer="' + value + '">' + formatCount(value) + '</button>';
+      }).join(""),
+      '</div>',
+      '</div>'
     ].join("");
+  }
+
+  function countAnswerOptions() {
+    const options = [];
+    for (let value = -12; value <= 12; value += 1) {
+      options.push(value);
+    }
+    return options;
   }
 
   function renderCountChoiceButtons(attributeName, disabled) {
@@ -1610,6 +1814,13 @@
       const selected = parseInt(target.dataset.countingValueAnswer, 10);
       const expected = hiLoValue(state.countingValueCard.rank);
       const isCorrect = selected === expected;
+      const elapsed = Math.max(0, Date.now() - state.countingValueStartedAt);
+      state.countingValueLastMs = elapsed;
+      state.countingValueLastWasCorrect = isCorrect;
+      if (isCorrect) {
+        state.countingValueSpeeds.push(elapsed);
+        state.countingValueSpeeds = state.countingValueSpeeds.slice(-12);
+      }
       recordCountingResult(isCorrect);
       if (isCorrect) {
         resetCountingValueCard();
@@ -1619,6 +1830,13 @@
           message: state.countingValueCard.rank + " is " + formatCount(expected) + "."
         };
       }
+      render();
+      return;
+    }
+
+    if (target.dataset.countingRunAnswer !== undefined) {
+      state.countingRunAnswer = target.dataset.countingRunAnswer;
+      state.countingRunFeedback = null;
       render();
       return;
     }
@@ -1652,6 +1870,11 @@
         return;
       }
       state.countingRunIndex += 1;
+      state.countingRunLastAdvancedAt = Date.now();
+      state.countingRunTransition += 1;
+      if (state.countingRunIndex >= state.countingRunCards.length) {
+        state.countingRunFinishedAt = state.countingRunLastAdvancedAt;
+      }
       state.countingRunFeedback = null;
       state.countingRunShowCount = false;
       render();
@@ -1676,7 +1899,7 @@
         correct: isCorrect,
         message: isNumber ?
           "The final running count is " + formatCount(expected) + "." :
-          "Enter a final running count before checking."
+          "Select a final running count before checking."
       };
       if (!isNumber) {
         render();
@@ -1738,15 +1961,6 @@
     if (target.dataset.action === "reset-progress") {
       resetProgress();
     }
-  });
-
-  document.addEventListener("input", function (event) {
-    const target = event.target;
-    if (!target || !target.dataset || target.dataset.countingRunAnswer === undefined) {
-      return;
-    }
-    state.countingRunAnswer = target.value;
-    state.countingRunFeedback = null;
   });
 
   window.addEventListener("hashchange", function () {
