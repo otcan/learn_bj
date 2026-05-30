@@ -33,7 +33,7 @@ All dealer upcard lessons are available from the start. Progress, quiz scores, p
 
 Lesson cards include an infinite-deck estimate of the dealer outcome distribution, dealer chance of going over 21, dealer average final total, an overall optimal-strategy summary for the selected dealer upcard, and a percentage-only Stand vs Hit once vs Optimal play outcome comparison.
 
-The Card Counting tab teaches the Hi-Lo values and includes card value, running count, and deck countdown drills.
+The Card Counting tab teaches the Hi-Lo values and includes a card value drill plus sequential running count drills for short runs, one-color half-decks, full decks, and multiple decks.
 
 Shareable app URLs use hash routes:
 

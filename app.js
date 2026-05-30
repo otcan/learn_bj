@@ -43,6 +43,28 @@
     { rank: "10", value: 10, probability: 4 / 13 }
   ];
   const COUNT_CHOICES = [1, 0, -1];
+  const COUNT_RUN_TYPES = {
+    short: {
+      label: "12 cards",
+      detail: "Fast warm-up",
+      description: "A short random stream for quick mental practice."
+    },
+    color: {
+      label: "One color",
+      detail: "26 cards",
+      description: "Only red cards: hearts and diamonds. The final count should be 0."
+    },
+    deck: {
+      label: "Full deck",
+      detail: "52 cards",
+      description: "One shuffled deck. The final count should be 0."
+    },
+    multi: {
+      label: "Multiple decks",
+      detail: "2 decks",
+      description: "Two shuffled decks mixed together. The final count should be 0."
+    }
+  };
   const DEALER_DISTRIBUTION_CACHE = {};
 
   const DEALER_NOTES = {
@@ -323,14 +345,12 @@
     countingMode: "value",
     countingValueCard: null,
     countingValueFeedback: null,
-    countingSequence: null,
-    countingSequenceAnswer: "",
-    countingSequenceFeedback: null,
-    countingDeck: null,
-    countingDeckIndex: 0,
-    countingDeckUserCount: 0,
-    countingDeckExpectedCount: 0,
-    countingDeckLast: null,
+    countingRunType: "short",
+    countingRunCards: null,
+    countingRunIndex: 0,
+    countingRunAnswer: "",
+    countingRunFeedback: null,
+    countingRunShowCount: false,
     progress: loadProgress()
   };
 
@@ -723,7 +743,18 @@
     return { rank: rank, suit: randomSuit() };
   }
 
-  function makeCountSequence(length) {
+  function shuffleCards(cards) {
+    const deck = cards.slice();
+    for (let index = deck.length - 1; index > 0; index -= 1) {
+      const swapIndex = Math.floor(Math.random() * (index + 1));
+      const card = deck[index];
+      deck[index] = deck[swapIndex];
+      deck[swapIndex] = card;
+    }
+    return deck;
+  }
+
+  function makeRandomCountSequence(length) {
     const sequence = [];
     for (let index = 0; index < length; index += 1) {
       sequence.push(randomCountCard());
@@ -737,20 +768,40 @@
     }, 0);
   }
 
-  function makeCountDeck() {
+  function makeCountDecks(deckCount, suits) {
     const deck = [];
-    COUNT_RANKS.forEach(function (rank) {
-      SUITS.forEach(function (suit) {
-        deck.push({ rank: rank, suit: suit });
+    for (let deckIndex = 0; deckIndex < deckCount; deckIndex += 1) {
+      COUNT_RANKS.forEach(function (rank) {
+        suits.forEach(function (suit) {
+          deck.push({ rank: rank, suit: suit });
+        });
       });
-    });
-    for (let index = deck.length - 1; index > 0; index -= 1) {
-      const swapIndex = Math.floor(Math.random() * (index + 1));
-      const card = deck[index];
-      deck[index] = deck[swapIndex];
-      deck[swapIndex] = card;
     }
-    return deck;
+    return shuffleCards(deck);
+  }
+
+  function makeCountingRunCards(type) {
+    if (type === "color") {
+      return makeCountDecks(1, ["H", "D"]);
+    }
+    if (type === "deck") {
+      return makeCountDecks(1, SUITS);
+    }
+    if (type === "multi") {
+      return makeCountDecks(2, SUITS);
+    }
+    return makeRandomCountSequence(12);
+  }
+
+  function currentRunSeenCards() {
+    if (!state.countingRunCards) {
+      return [];
+    }
+    return state.countingRunCards.slice(0, Math.min(state.countingRunIndex + 1, state.countingRunCards.length));
+  }
+
+  function currentRunCount() {
+    return countSequenceTotal(currentRunSeenCards());
   }
 
   function resetCountingValueCard() {
@@ -758,29 +809,26 @@
     state.countingValueFeedback = null;
   }
 
-  function resetCountingSequence() {
-    state.countingSequence = makeCountSequence(8);
-    state.countingSequenceAnswer = "";
-    state.countingSequenceFeedback = null;
-  }
-
-  function resetCountingDeck() {
-    state.countingDeck = makeCountDeck();
-    state.countingDeckIndex = 0;
-    state.countingDeckUserCount = 0;
-    state.countingDeckExpectedCount = 0;
-    state.countingDeckLast = null;
+  function resetCountingRun() {
+    state.countingRunCards = makeCountingRunCards(state.countingRunType);
+    state.countingRunIndex = 0;
+    state.countingRunAnswer = "";
+    state.countingRunFeedback = null;
+    state.countingRunShowCount = false;
   }
 
   function ensureCountingState() {
+    if (!["value", "running"].includes(state.countingMode)) {
+      state.countingMode = "running";
+    }
+    if (!COUNT_RUN_TYPES[state.countingRunType]) {
+      state.countingRunType = "short";
+    }
     if (!state.countingValueCard) {
       resetCountingValueCard();
     }
-    if (!state.countingSequence) {
-      resetCountingSequence();
-    }
-    if (!state.countingDeck) {
-      resetCountingDeck();
+    if (!state.countingRunCards) {
+      resetCountingRun();
     }
   }
 
@@ -1205,7 +1253,7 @@
       '<div class="panel-header counting-header">',
       '<div>',
       '<h2>Card Counting</h2>',
-      '<p class="muted">Hi-Lo drills for card values, running count, and full-deck countdown practice.</p>',
+      '<p class="muted">Hi-Lo drills for card values and mental running count practice.</p>',
       '</div>',
       '<div class="counting-stats">',
       '<div class="stat"><strong>' + counting.attempts + '</strong><span>Counting answers</span></div>',
@@ -1252,8 +1300,7 @@
   function renderCountingModeTabs() {
     const modes = [
       { key: "value", label: "Card Value" },
-      { key: "running", label: "Running Count" },
-      { key: "deck", label: "Deck Countdown" }
+      { key: "running", label: "Running Count" }
     ];
     return [
       '<div class="counting-mode-tabs" aria-label="Counting drill modes">',
@@ -1272,9 +1319,6 @@
     if (state.countingMode === "running") {
       return renderRunningCountDrill();
     }
-    if (state.countingMode === "deck") {
-      return renderDeckCountdownDrill();
-    }
     return renderCardValueDrill();
   }
 
@@ -1285,7 +1329,7 @@
       '<section class="counting-drill">',
       '<div class="drill-copy">',
       '<h3>Card Value Drill</h3>',
-      '<p class="muted">Look at the card and choose its Hi-Lo value.</p>',
+      '<p class="muted">Look at the card and choose its Hi-Lo value. Correct answers advance immediately.</p>',
       '</div>',
       '<div class="count-card-stage">',
       renderLargeCountingCard(card),
@@ -1300,82 +1344,73 @@
   }
 
   function renderRunningCountDrill() {
-    const sequence = state.countingSequence;
-    const feedback = state.countingSequenceFeedback;
+    const cards = state.countingRunCards;
+    const index = state.countingRunIndex;
+    const done = index >= cards.length;
+    const card = done ? null : cards[index];
+    const feedback = state.countingRunFeedback;
+    const runType = COUNT_RUN_TYPES[state.countingRunType];
+    const currentCount = currentRunCount();
     return [
       '<section class="counting-drill">',
       '<div class="drill-copy">',
       '<h3>Running Count Drill</h3>',
-      '<p class="muted">Add the Hi-Lo values for the whole row, then enter the final running count.</p>',
+      '<p class="muted">Watch one card at a time and keep the running count in your head. Answer only at the end.</p>',
       '</div>',
-      '<div class="count-sequence">',
-      sequence.map(function (card) {
-        return renderPlayingCard(card.rank, card.suit);
-      }).join(""),
+      renderCountingRunOptions(),
+      '<div class="deck-progress">',
+      '<div class="stat"><strong>' + Math.min(index + 1, cards.length) + '/' + cards.length + '</strong><span>Card position</span></div>',
+      '<div class="stat"><strong>' + runType.label + '</strong><span>' + runType.detail + '</span></div>',
+      '<div class="stat"><strong>' + state.progress.counting.decksCompleted + '</strong><span>Runs completed</span></div>',
       '</div>',
-      '<label class="count-input-row">',
-      '<span>Final running count</span>',
-      '<input class="count-input" type="number" inputmode="numeric" data-counting-sequence-answer value="' + state.countingSequenceAnswer + '">',
-      '</label>',
+      done ? renderRunningCountAnswer() : renderRunningCountCard(card),
+      state.countingRunShowCount ? '<div class="count-reveal">Current count: <strong>' + formatCount(currentCount) + '</strong></div>' : "",
       feedback ? renderCountingFeedback(feedback.correct, feedback.message) : "",
       '<div class="controls-row">',
-      '<button class="primary-button" type="button" data-action="check-count-sequence">Check count</button>',
-      '<button class="secondary-button" type="button" data-action="new-count-sequence">New sequence</button>',
+      done ? '<button class="primary-button" type="button" data-action="check-count-run">Check count</button>' : '<button class="primary-button" type="button" data-action="next-count-card">Next card</button>',
+      '<button class="secondary-button" type="button" data-action="toggle-count-reveal">' + (state.countingRunShowCount ? "Hide count" : "Show count") + '</button>',
+      '<button class="secondary-button" type="button" data-action="new-count-run">New run</button>',
       '</div>',
       '</section>'
     ].join("");
   }
 
-  function renderDeckCountdownDrill() {
-    const deck = state.countingDeck;
-    const index = state.countingDeckIndex;
-    const done = index >= deck.length;
-    const card = done ? null : deck[index];
-    const finalCorrect = done && state.countingDeckUserCount === 0;
+  function renderCountingRunOptions() {
     return [
-      '<section class="counting-drill">',
-      '<div class="drill-copy">',
-      '<h3>Deck Countdown Drill</h3>',
-      '<p class="muted">Count through one shuffled deck. If every card is counted correctly, the final running count is 0.</p>',
-      '</div>',
-      '<div class="deck-progress">',
-      '<div class="stat"><strong>' + Math.min(index + 1, deck.length) + '/' + deck.length + '</strong><span>Card position</span></div>',
-      '<div class="stat"><strong>' + formatCount(state.countingDeckUserCount) + '</strong><span>Your running count</span></div>',
-      '<div class="stat"><strong>' + state.progress.counting.decksCompleted + '</strong><span>Decks completed</span></div>',
-      '</div>',
-      done ? renderDeckComplete(finalCorrect) : renderDeckCardPrompt(card),
-      state.countingDeckLast ? renderDeckLastResult() : "",
-      '<div class="controls-row">',
-      '<button class="secondary-button" type="button" data-action="new-count-deck">Shuffle new deck</button>',
-      '</div>',
-      '</section>'
+      '<div class="run-options" aria-label="Running count drill size">',
+      Object.keys(COUNT_RUN_TYPES).map(function (key) {
+        const option = COUNT_RUN_TYPES[key];
+        const classes = ["run-option"];
+        if (state.countingRunType === key) {
+          classes.push("active");
+        }
+        return [
+          '<button class="' + classes.join(" ") + '" type="button" data-counting-run-type="' + key + '">',
+          '<strong>' + option.label + '</strong>',
+          '<span>' + option.description + '</span>',
+          '</button>'
+        ].join("");
+      }).join(""),
+      '</div>'
     ].join("");
   }
 
-  function renderDeckCardPrompt(card) {
+  function renderRunningCountCard(card) {
     return [
       '<div class="count-card-stage">',
       renderLargeCountingCard(card),
       '</div>',
-      renderCountChoiceButtons("data-counting-deck-answer", false)
+      '<p class="math-note">Include this card in your mental count before pressing Next card.</p>'
     ].join("");
   }
 
-  function renderDeckComplete(finalCorrect) {
-    return renderCountingFeedback(
-      finalCorrect,
-      finalCorrect ?
-        "Deck complete. Your final running count is 0." :
-        "Deck complete. Your final running count is " + formatCount(state.countingDeckUserCount) + ". A full deck should finish at 0."
-    );
-  }
-
-  function renderDeckLastResult() {
-    const last = state.countingDeckLast;
-    return renderCountingFeedback(
-      last.correct,
-      "Last card: " + last.rank + " is " + formatCount(last.expected) + ". Your running count is " + formatCount(state.countingDeckUserCount) + "."
-    );
+  function renderRunningCountAnswer() {
+    return [
+      '<label class="count-input-row">',
+      '<span>Final running count</span>',
+      '<input class="count-input" type="number" inputmode="numeric" data-counting-run-answer value="' + state.countingRunAnswer + '">',
+      '</label>'
+    ].join("");
   }
 
   function renderCountChoiceButtons(attributeName, disabled) {
@@ -1540,6 +1575,13 @@
       return;
     }
 
+    if (target.dataset.countingRunType) {
+      state.countingRunType = target.dataset.countingRunType;
+      resetCountingRun();
+      render();
+      return;
+    }
+
     if (target.dataset.dealer) {
       const dealer = target.dataset.dealer;
       if (!isUnlocked(dealer)) {
@@ -1568,37 +1610,15 @@
       const selected = parseInt(target.dataset.countingValueAnswer, 10);
       const expected = hiLoValue(state.countingValueCard.rank);
       const isCorrect = selected === expected;
-      state.countingValueFeedback = {
-        correct: isCorrect,
-        message: state.countingValueCard.rank + " is " + formatCount(expected) + "."
-      };
       recordCountingResult(isCorrect);
-      render();
-      return;
-    }
-
-    if (target.dataset.countingDeckAnswer) {
-      const deck = state.countingDeck;
-      if (!deck || state.countingDeckIndex >= deck.length) {
-        return;
+      if (isCorrect) {
+        resetCountingValueCard();
+      } else {
+        state.countingValueFeedback = {
+          correct: false,
+          message: state.countingValueCard.rank + " is " + formatCount(expected) + "."
+        };
       }
-      const card = deck[state.countingDeckIndex];
-      const selected = parseInt(target.dataset.countingDeckAnswer, 10);
-      const expected = hiLoValue(card.rank);
-      const isCorrect = selected === expected;
-      state.countingDeckUserCount += selected;
-      state.countingDeckExpectedCount += expected;
-      state.countingDeckLast = {
-        rank: card.rank,
-        expected: expected,
-        selected: selected,
-        correct: isCorrect
-      };
-      state.countingDeckIndex += 1;
-      if (state.countingDeckIndex >= deck.length) {
-        state.progress.counting.decksCompleted += 1;
-      }
-      recordCountingResult(isCorrect);
       render();
       return;
     }
@@ -1627,15 +1647,32 @@
       return;
     }
 
-    if (target.dataset.action === "check-count-sequence") {
-      if (state.countingSequenceFeedback) {
+    if (target.dataset.action === "next-count-card") {
+      if (!state.countingRunCards || state.countingRunIndex >= state.countingRunCards.length) {
         return;
       }
-      const expected = countSequenceTotal(state.countingSequence);
-      const selected = parseInt(state.countingSequenceAnswer, 10);
+      state.countingRunIndex += 1;
+      state.countingRunFeedback = null;
+      state.countingRunShowCount = false;
+      render();
+      return;
+    }
+
+    if (target.dataset.action === "toggle-count-reveal") {
+      state.countingRunShowCount = !state.countingRunShowCount;
+      render();
+      return;
+    }
+
+    if (target.dataset.action === "check-count-run") {
+      if (state.countingRunFeedback) {
+        return;
+      }
+      const expected = countSequenceTotal(state.countingRunCards);
+      const selected = parseInt(state.countingRunAnswer, 10);
       const isNumber = !Number.isNaN(selected);
       const isCorrect = isNumber && selected === expected;
-      state.countingSequenceFeedback = {
+      state.countingRunFeedback = {
         correct: isCorrect,
         message: isNumber ?
           "The final running count is " + formatCount(expected) + "." :
@@ -1645,19 +1682,14 @@
         render();
         return;
       }
+      state.progress.counting.decksCompleted += 1;
       recordCountingResult(isCorrect);
       render();
       return;
     }
 
-    if (target.dataset.action === "new-count-sequence") {
-      resetCountingSequence();
-      render();
-      return;
-    }
-
-    if (target.dataset.action === "new-count-deck") {
-      resetCountingDeck();
+    if (target.dataset.action === "new-count-run") {
+      resetCountingRun();
       render();
       return;
     }
@@ -1710,11 +1742,11 @@
 
   document.addEventListener("input", function (event) {
     const target = event.target;
-    if (!target || !target.dataset || target.dataset.countingSequenceAnswer === undefined) {
+    if (!target || !target.dataset || target.dataset.countingRunAnswer === undefined) {
       return;
     }
-    state.countingSequenceAnswer = target.value;
-    state.countingSequenceFeedback = null;
+    state.countingRunAnswer = target.value;
+    state.countingRunFeedback = null;
   });
 
   window.addEventListener("hashchange", function () {
