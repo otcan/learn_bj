@@ -13,3 +13,4 @@ screenshots/
 *.jpg
 *.jpeg
 *.gif
+!social-preview.png
