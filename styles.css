@@ -338,7 +338,7 @@ h1 {
 
 .overall-metrics {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
 }
 
@@ -511,7 +511,7 @@ h1 {
 
 .outcome-table {
   display: grid;
-  grid-template-columns: minmax(74px, 1.2fr) repeat(3, minmax(48px, 1fr));
+  grid-template-columns: minmax(74px, 1.2fr) repeat(4, minmax(48px, 1fr));
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -527,13 +527,13 @@ h1 {
   padding: 8px;
 }
 
-.outcome-head:nth-child(4n),
-.outcome-label:nth-child(4n),
-.outcome-value:nth-child(4n) {
+.outcome-head:nth-child(5n),
+.outcome-label:nth-child(5n),
+.outcome-value:nth-child(5n) {
   border-right: 0;
 }
 
-.outcome-table > :nth-last-child(-n + 4) {
+.outcome-table > :nth-last-child(-n + 5) {
   border-bottom: 0;
 }
 
@@ -555,6 +555,20 @@ h1 {
 
 .math-note {
   margin-top: 8px;
+}
+
+.odds-explainer {
+  margin-top: 8px;
+  border: 1px solid rgba(49, 93, 155, 0.22);
+  border-radius: 8px;
+  background: #f4f7fb;
+  padding: 9px 10px;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.odds-explainer strong {
+  color: var(--ink);
 }
 
 .quiz-grid {
@@ -704,6 +718,50 @@ h1 {
   background: #f9e8e5;
 }
 
+.split-preview {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+  border: 1px solid rgba(15, 107, 79, 0.28);
+  border-radius: 8px;
+  background: #f6fbf8;
+  padding: 12px;
+}
+
+.split-preview-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.split-preview-heading span {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 750;
+}
+
+.split-preview-hands {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.split-preview-hand {
+  display: grid;
+  gap: 8px;
+  border: 1px solid rgba(15, 107, 79, 0.2);
+  border-radius: 8px;
+  background: #fff;
+  padding: 10px;
+}
+
+.split-preview-hand > span {
+  color: var(--green-dark);
+  font-size: 0.82rem;
+  font-weight: 850;
+}
+
 .practice-odds {
   display: grid;
   gap: 12px;
@@ -746,7 +804,7 @@ h1 {
 
 .count-odds-table {
   display: grid;
-  grid-template-columns: minmax(64px, 0.8fr) minmax(112px, 1.25fr) repeat(3, minmax(56px, 1fr));
+  grid-template-columns: minmax(64px, 0.75fr) minmax(112px, 1.2fr) repeat(4, minmax(56px, 1fr));
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -761,12 +819,12 @@ h1 {
   padding: 8px;
 }
 
-.count-odds-head:nth-child(5n),
-.count-odds-cell:nth-child(5n) {
+.count-odds-head:nth-child(6n),
+.count-odds-cell:nth-child(6n) {
   border-right: 0;
 }
 
-.count-odds-table > :nth-last-child(-n + 5) {
+.count-odds-table > :nth-last-child(-n + 6) {
   border-bottom: 0;
 }
 
@@ -1733,6 +1791,14 @@ th:first-child {
     display: block;
   }
 
+  .split-preview-heading {
+    display: block;
+  }
+
+  .split-preview-hands {
+    grid-template-columns: 1fr;
+  }
+
   .latest-assessment {
     display: grid;
   }
@@ -1755,8 +1821,19 @@ th:first-child {
     grid-template-columns: 1fr;
   }
 
+  .outcome-table {
+    grid-template-columns: minmax(70px, 1.1fr) repeat(4, minmax(42px, 1fr));
+  }
+
+  .outcome-head,
+  .outcome-label,
+  .outcome-value {
+    padding: 7px 5px;
+    font-size: 0.76rem;
+  }
+
   .count-odds-table {
-    grid-template-columns: minmax(56px, 0.8fr) minmax(96px, 1.15fr) repeat(3, minmax(48px, 1fr));
+    grid-template-columns: minmax(52px, 0.8fr) minmax(82px, 1.1fr) repeat(4, minmax(44px, 1fr));
   }
 
   .count-odds-head,

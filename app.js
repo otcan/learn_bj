@@ -821,7 +821,8 @@
       win: 0,
       push: 0,
       lose: 0,
-      perSplitHand: true
+      perSplitHand: true,
+      averageUnitsScope: "both split hands"
     };
 
     drawSet.forEach(function (draw) {
@@ -835,20 +836,49 @@
     return outcome;
   }
 
+  function averageResultUnits(outcome, action) {
+    const score = outcomeScore(outcome);
+    if (action === "D") {
+      return score * 2;
+    }
+    if (action === "P" && outcome.perSplitHand) {
+      return score * 2;
+    }
+    return score;
+  }
+
+  function formatAverageResult(value) {
+    const rounded = Math.round(value * 100) / 100;
+    return (rounded > 0 ? "+" : "") + rounded.toFixed(2);
+  }
+
+  function outcomeAverageResult(outcome, action) {
+    if (typeof outcome.averageUnits === "number") {
+      return outcome.averageUnits;
+    }
+    return averageResultUnits(outcome, action);
+  }
+
+  function withActionResult(outcome, action) {
+    const next = Object.assign({}, outcome);
+    next.averageUnits = averageResultUnits(next, action);
+    return next;
+  }
+
   function outcomeForAction(cards, dealer, action, draws) {
     if (action === "S") {
-      return standOutcomeForCards(cards, dealer, draws);
+      return withActionResult(standOutcomeForCards(cards, dealer, draws), action);
     }
     if (action === "D") {
-      return hitOnceOutcomeForCards(cards, dealer, draws);
+      return withActionResult(hitOnceOutcomeForCards(cards, dealer, draws), action);
     }
     if (action === "P") {
       if (!isSplittableCards(cards)) {
-        return { win: 0, push: 0, lose: 1, invalid: true };
+        return withActionResult({ win: 0, push: 0, lose: 1, invalid: true }, action);
       }
-      return splitOutcomeForCards(cards, dealer, draws);
+      return withActionResult(splitOutcomeForCards(cards, dealer, draws), action);
     }
-    return hitOptimalOutcomeForCards(cards, dealer, draws);
+    return withActionResult(hitOptimalOutcomeForCards(cards, dealer, draws), action);
   }
 
   function optimalHitStandOutcome(row, dealer, draws) {
@@ -1349,6 +1379,7 @@
       '</div>',
       '</div>',
       renderBasicsSection(),
+      renderMathAssumptionsSection(),
       renderLessonSection("Hard Totals", "Hands without a flexible ace.", HARD_ROWS, dealer),
       renderLessonSection("Soft Totals", "Hands where an ace can count as 11.", SOFT_ROWS, dealer),
       renderLessonSection("Pairs", "Two equal ranks before any hit.", PAIR_ROWS, dealer),
@@ -1383,6 +1414,7 @@
       renderHeaderMetric("Win", formatPercent(overall.win)),
       renderHeaderMetric("Tie", formatPercent(overall.push)),
       renderHeaderMetric("Lose", formatPercent(overall.lose)),
+      renderHeaderMetric("Avg result", formatAverageResult(outcomeScore(overall)) + " units"),
       '</div>',
       '</div>',
       '<p class="math-note">A bust counts as 0 in the average final total. The not-bust average only looks at dealer hands from 17 to 21.</p>'
@@ -1425,6 +1457,23 @@
     ].join("");
   }
 
+  function renderMathAssumptionsSection() {
+    return [
+      '<section class="section assumptions-section">',
+      '<div class="section-heading">',
+      '<h3>How the Chances Are Estimated</h3>',
+      '<p class="section-subtitle">The model used by the tables on this page.</p>',
+      '</div>',
+      '<div class="basics-grid">',
+      renderBasicItem("Rules", "Multi-deck game, dealer stands on soft 17, double after split allowed, and no surrender."),
+      renderBasicItem("Card mix", "Lesson percentages use an infinite-shoe estimate. That keeps the examples simple and consistent."),
+      renderBasicItem("Count rows", "Practice count rows adjust the card mix as a Hi-Lo true-count estimate. Treat them as training guidance, not exact table math."),
+      renderBasicItem("Splits", "Split win/tie/lose chances are shown per new hand. Avg result combines the two split hands because splitting creates a second bet."),
+      '</div>',
+      '</section>'
+    ].join("");
+  }
+
   function renderLessonSection(title, subtitle, rows, dealer) {
     return [
       '<section class="section">',
@@ -1456,37 +1505,52 @@
   }
 
   function renderMathPanel(row, dealer) {
+    const recommendedAction = actionFor(row, dealer);
     const stand = standOutcome(row, dealer);
     const hit = hitOnceOutcome(row, dealer);
+    const recommended = outcomeForAction(row.cards, dealer, recommendedAction);
     const optimal = optimalHitStandOutcome(row, dealer);
     return [
       '<div class="math-panel">',
-      renderOutcomeTable(stand, hit, optimal),
-      '<p class="math-note">Hit once stops after one card. Optimal strategy keeps choosing the better hit-or-stand path after each card. All values are percentages.</p>',
+      renderOutcomeTable(stand, hit, recommended, optimal, recommendedAction),
+      renderOddsExplainer(recommendedAction === "P"),
+      '<p class="math-note">Hit once stops after one card. Basic strategy shows the recommended action, including Double or Split. Best hit/stand path keeps choosing between hit and stand after each card.</p>',
       '</div>'
     ].join("");
   }
 
-  function renderOutcomeTable(stand, hit, optimal) {
+  function renderOutcomeTable(stand, hit, recommended, optimal, recommendedAction) {
     return [
       '<div class="outcome-table" aria-label="Outcome comparison">',
       '<div class="outcome-head">Choice</div>',
       '<div class="outcome-head">Win</div>',
       '<div class="outcome-head">Tie</div>',
       '<div class="outcome-head">Lose</div>',
-      renderOutcomeRow("Stand", stand),
-      renderOutcomeRow("Hit once", hit),
-      renderOutcomeRow("Optimal strategy", optimal),
+      '<div class="outcome-head">Avg result</div>',
+      renderOutcomeRow("Stand", stand, "S"),
+      renderOutcomeRow("Hit once", hit, "H"),
+      renderOutcomeRow("Basic strategy: " + ACTIONS[recommendedAction].label, recommended, recommendedAction),
+      renderOutcomeRow("Best hit/stand path", optimal, "H"),
       '</div>'
     ].join("");
   }
 
-  function renderOutcomeRow(label, outcome) {
+  function renderOutcomeRow(label, outcome, action) {
     return [
       '<div class="outcome-label">' + label + '</div>',
       '<div class="outcome-value">' + formatPercent(outcome.win) + '</div>',
       '<div class="outcome-value">' + formatPercent(outcome.push) + '</div>',
-      '<div class="outcome-value">' + formatPercent(outcome.lose) + '</div>'
+      '<div class="outcome-value">' + formatPercent(outcome.lose) + '</div>',
+      '<div class="outcome-value">' + formatAverageResult(outcomeAverageResult(outcome, action)) + '</div>'
+    ].join("");
+  }
+
+  function renderOddsExplainer(includeSplit) {
+    return [
+      '<p class="odds-explainer">',
+      '<strong>How to read this:</strong> Win, tie, and lose are chances. Avg result is the average profit in betting units from the original hand. +0.10 means gaining 0.10 units per repeat; -0.10 means losing 0.10 units. Double uses two units.',
+      includeSplit ? ' For splits, win/tie/lose is for one new hand; Avg result combines the two split hands.' : "",
+      '</p>'
     ].join("");
   }
 
@@ -1654,9 +1718,46 @@
       '<div class="feedback ' + tone + '">',
       '<strong>' + (feedback.correct ? "Correct" : "Not this time") + '</strong>',
       '<p>The play is ' + describeAction(feedback.action) + '. ' + feedback.explanation + '</p>',
+      renderSplitPreviewForActions(feedback.scenario, feedback.selected, feedback.action),
       renderPracticeOdds(feedback.scenario, feedback.selected),
       '<div class="controls-row">',
       '<button class="primary-button" type="button" data-action="new-hand">Next hand</button>',
+      '</div>',
+      '</div>'
+    ].join("");
+  }
+
+  function renderSplitPreviewForActions(scenario, selectedAction, correctAction) {
+    if (!isSplittableCards(scenario.cards) || (selectedAction !== "P" && correctAction !== "P")) {
+      return "";
+    }
+    return renderSplitPreview(scenario);
+  }
+
+  function renderSplitPreview(scenario) {
+    const first = scenario.cards[0];
+    const second = scenario.cards[1];
+    return [
+      '<div class="split-preview" aria-label="Split hand preview">',
+      '<div class="split-preview-heading">',
+      '<strong>After a split</strong>',
+      '<span>The pair becomes two separate hands. Each gets one new card before you continue.</span>',
+      '</div>',
+      '<div class="split-preview-hands">',
+      renderSplitPreviewHand("Split hand 1", first, "H"),
+      renderSplitPreviewHand("Split hand 2", second, "S"),
+      '</div>',
+      '</div>'
+    ].join("");
+  }
+
+  function renderSplitPreviewHand(label, rank, suit) {
+    return [
+      '<div class="split-preview-hand">',
+      '<span>' + label + '</span>',
+      '<div class="card-row">',
+      renderPlayingCard(rank, suit),
+      renderHiddenCard("Next card for " + label.toLowerCase()),
       '</div>',
       '</div>'
     ].join("");
@@ -1666,7 +1767,7 @@
     const neutralOutcome = outcomeForAction(scenario.cards, scenario.dealer, selectedAction, countAdjustedDraws(0));
     const splitNote = selectedAction === "P" || countDeviationsForScenario(scenario).some(function (deviation) {
       return deviation.action === "P";
-    }) ? " Split odds are shown per split hand." : "";
+    }) ? " Split win/tie/lose chances are per new hand; Avg result combines the two split hands." : "";
     return [
       '<div class="practice-odds">',
       '<div class="practice-odds-heading">',
@@ -1676,9 +1777,10 @@
       '<div class="neutral-odds">',
       '<span>Your selected play at count 0</span>',
       '<strong>' + ACTIONS[selectedAction].label + ': ' + formatPercent(neutralOutcome.win) + ' win</strong>',
-      '<small>Tie ' + formatPercent(neutralOutcome.push) + ' | Lose ' + formatPercent(neutralOutcome.lose) + '</small>',
+      '<small>Tie ' + formatPercent(neutralOutcome.push) + ' | Lose ' + formatPercent(neutralOutcome.lose) + ' | Avg result ' + formatAverageResult(outcomeAverageResult(neutralOutcome, selectedAction)) + ' units</small>',
       '</div>',
       renderCountOddsTable(scenario),
+      renderOddsExplainer(selectedAction === "P" || isSplittableCards(scenario.cards)),
       '<p class="math-note">' + countActionNote(scenario) + ' High counts mean more tens and aces remain; low counts mean more small cards remain.' + splitNote + '</p>',
       '</div>'
     ].join("");
@@ -1692,6 +1794,7 @@
       '<div class="count-odds-head">Win</div>',
       '<div class="count-odds-head">Tie</div>',
       '<div class="count-odds-head">Lose</div>',
+      '<div class="count-odds-head">Avg result</div>',
       COUNT_EXAMPLES.map(function (trueCount) {
         const action = countAwareAction(scenario, trueCount);
         const outcome = outcomeForAction(scenario.cards, scenario.dealer, action, countAdjustedDraws(trueCount));
@@ -1700,7 +1803,8 @@
           '<div class="count-odds-cell"><strong>' + ACTIONS[action].label + '</strong></div>',
           '<div class="count-odds-cell">' + formatPercent(outcome.win) + '</div>',
           '<div class="count-odds-cell">' + formatPercent(outcome.push) + '</div>',
-          '<div class="count-odds-cell">' + formatPercent(outcome.lose) + '</div>'
+          '<div class="count-odds-cell">' + formatPercent(outcome.lose) + '</div>',
+          '<div class="count-odds-cell">' + formatAverageResult(outcomeAverageResult(outcome, action)) + '</div>'
         ].join("");
       }).join(""),
       '</div>'
@@ -2482,6 +2586,7 @@
       renderPracticeTable(scenario),
       renderAssessmentActionChoices(question),
       renderAssessmentAnswerFeedback(question),
+      renderAssessmentSplitPreview(question),
       renderAssessmentNextRow(),
       '</div>'
     ].join("");
@@ -2598,6 +2703,14 @@
       '<span>Correct answer: ' + assessmentCorrectLabel(question) + '</span>',
       '</div>'
     ].join("");
+  }
+
+  function renderAssessmentSplitPreview(question) {
+    const answer = currentAssessmentAnswer();
+    if (!answer || !question.scenario) {
+      return "";
+    }
+    return renderSplitPreviewForActions(question.scenario, answer.selected, question.correct);
   }
 
   function renderAssessmentNextRow() {
@@ -2820,9 +2933,9 @@
     ].join("");
   }
 
-  function renderHiddenCard() {
+  function renderHiddenCard(label) {
     return [
-      '<div class="playing-card card-back" aria-label="Hidden dealer card">',
+      '<div class="playing-card card-back" aria-label="' + (label || "Hidden dealer card") + '">',
       '<span>?</span>',
       '</div>'
     ].join("");

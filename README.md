@@ -31,9 +31,9 @@ Ruleset used by the MVP:
 
 All dealer upcard lessons are available from the start. Progress, quiz scores, practice stats, and counting drill stats are stored in browser local storage.
 
-Lesson cards include an infinite-deck estimate of the dealer outcome distribution, dealer chance of going over 21, dealer average final total, an overall optimal-strategy summary for the selected dealer upcard, and a percentage-only Stand vs Hit once vs Optimal play outcome comparison.
+Lesson cards include an infinite-deck estimate of the dealer outcome distribution, dealer chance of going over 21, dealer average final total, an overall optimal-strategy summary for the selected dealer upcard, and a Stand vs Hit once vs Basic strategy vs Best hit/stand comparison with win/tie/lose percentages plus average result in betting units.
 
-Practice hands use a table-style layout and show neutral count-0 winning chances after each answer, plus estimated outcome changes for negative, neutral, and positive Hi-Lo true counts.
+Practice hands use a table-style layout and show neutral count-0 winning chances after each answer, plus estimated outcome changes for negative, neutral, and positive Hi-Lo true counts. Split feedback shows the two new hands separately; split win/tie/lose chances are per new hand, while average result combines both split hands.
 
 The Card Counting tab teaches the Hi-Lo values and includes a card value drill with response-speed feedback plus sequential running count drills for short runs, one-color half-decks, full decks, and multiple decks. Running count drills show pace feedback and use selectable boxes for the final count.
 
